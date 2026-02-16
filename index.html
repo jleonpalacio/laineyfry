@@ -149,8 +149,8 @@ function AddItemForm(props) {
   var _manual = useState(false), showManual = _manual[0], setShowManual = _manual[1];
   var _mn = useState(""), manualName = _mn[0], setManualName = _mn[1];
   var _mp = useState(""), manualPrice = _mp[0], setManualPrice = _mp[1];
+  var timerRef = useRef(null);
   var abortRef = useRef(null);
-  var inputRef = useRef(null);
 
   function extractSlug(u) {
     var m = u.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
@@ -158,30 +158,36 @@ function AddItemForm(props) {
   }
 
   function doFetch(inputUrl) {
-    setUrl(inputUrl);
-    setProduct(null);
-    setError(null);
-    setJustAdded(null);
-    setShowManual(false);
-    if (!inputUrl.includes("mailegusa.com/products/")) return;
+    if (!inputUrl || !inputUrl.match(/mailegusa\.com\/products\//i)) return;
     if (abortRef.current) abortRef.current.cancelled = true;
     var token = { cancelled: false };
     abortRef.current = token;
     setFetching(true);
+    setProduct(null);
+    setError(null);
+    setShowManual(false);
     fetchProductInfo(inputUrl)
       .then(function(p) { if (!token.cancelled) setProduct(p); })
       .catch(function() {
         if (!token.cancelled) {
-          // Show manual entry with slug pre-filled
           setShowManual(true);
-          setError("Auto-fetch didn't work — enter details manually below.");
+          setError("Auto-fetch didn't work \u2014 enter details manually below.");
         }
       })
       .finally(function() { if (!token.cancelled) setFetching(false); });
   }
 
-  function handleFetchButton() {
-    if (url.includes("mailegusa.com/products/")) doFetch(url);
+  function handleUrlChange(e) {
+    var val = e.target.value;
+    setUrl(val);
+    setProduct(null);
+    setError(null);
+    setJustAdded(null);
+    setShowManual(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (val.match(/mailegusa\.com\/products\/[a-z0-9-]+/i)) {
+      timerRef.current = setTimeout(function() { doFetch(val); }, 500);
+    }
   }
 
   function handleAdd() {
@@ -191,8 +197,6 @@ function AddItemForm(props) {
     var added = product.name;
     setUrl(""); setProduct(null); setError(null); setSize("Little Sister"); setJustAdded(added); setShowManual(false);
     if (abortRef.current) abortRef.current.cancelled = true;
-    // Focus input for next paste
-    setTimeout(function() { if (inputRef.current) inputRef.current.focus(); }, 100);
   }
 
   function handleManualAdd() {
@@ -203,51 +207,46 @@ function AddItemForm(props) {
     var added = manualName.trim();
     setUrl(""); setManualName(""); setManualPrice(""); setProduct(null); setError(null); setSize("Little Sister"); setShowManual(false); setJustAdded(added);
     if (abortRef.current) abortRef.current.cancelled = true;
-    setTimeout(function() { if (inputRef.current) inputRef.current.focus(); }, 100);
   }
 
-  var SIZES = ["Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
+  var SZ = ["Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
 
   return (
     <div className="add-form">
       <h3>Add Item</h3>
-      <div className="add-hint">Paste a mailegusa.com product link and hit Enter or click Fetch.</div>
+      <div className="add-hint">Paste a mailegusa.com product link below — info loads automatically.</div>
 
-      {justAdded && <div className="success-msg">✓ Added "{justAdded}" — paste another link or close.</div>}
+      {justAdded && <div className="success-msg">{"\u2713 Added \u201c" + justAdded + "\u201d \u2014 paste another link or close."}</div>}
 
-      <div style={{display:"flex",gap:6}}>
-        <input ref={inputRef} style={{flex:1,marginBottom:0}} placeholder="https://www.mailegusa.com/products/..." value={url}
-          onChange={function(e) { setUrl(e.target.value); setProduct(null); setError(null); setJustAdded(null); setShowManual(false); }}
-          onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); doFetch(url); } }}
-          autoFocus />
-        <button style={{padding:"10px 16px",border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:12,whiteSpace:"nowrap",flexShrink:0}} onClick={handleFetchButton}>Fetch</button>
-      </div>
-      <div style={{height:10}}></div>
+      <input
+        placeholder="https://www.mailegusa.com/products/..."
+        value={url}
+        onChange={handleUrlChange}
+        autoFocus
+      />
 
       {fetching && <div className="fetching"><div className="loading" style={{width:16,height:16,borderWidth:2}}></div> Loading product info...</div>}
       {error && <p style={{fontSize:12,color:"#c07070",marginBottom:10}}>{error}</p>}
 
-      {/* Auto-fetched product preview */}
       {product && (
         <div>
           <div className="fetched-preview">
             {product.img && <img src={product.img} alt="" />}
             <div className="fp-info">
               <h4>{product.name}</h4>
-              {product.price && <span>${product.price}</span>}
+              {product.price != null && <span>{"$" + product.price}</span>}
             </div>
           </div>
           <select value={size} onChange={function(e) { setSize(e.target.value); }}>
-            {SIZES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+            {SZ.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
           </select>
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={handleAdd}>Add to Wishlist</button>
-            <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={onClose}>Done</button>
+          <div className="modal-actions" style={{marginTop:6}}>
+            <button className="confirm" onClick={handleAdd}>Add to Wishlist</button>
+            <button className="cancel" onClick={onClose}>Done</button>
           </div>
         </div>
       )}
 
-      {/* Manual fallback form */}
       {showManual && !product && (
         <div className="manual-fields">
           <label>Product name</label>
@@ -256,17 +255,17 @@ function AddItemForm(props) {
           <input type="number" placeholder="e.g. 35" value={manualPrice} onChange={function(e) { setManualPrice(e.target.value); }} />
           <label>Size</label>
           <select value={size} onChange={function(e) { setSize(e.target.value); }}>
-            {SIZES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+            {SZ.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
           </select>
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={handleManualAdd}>Add to Wishlist</button>
-            <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={onClose}>Done</button>
+          <div className="modal-actions" style={{marginTop:6}}>
+            <button className="confirm" onClick={handleManualAdd}>Add to Wishlist</button>
+            <button className="cancel" onClick={onClose}>Done</button>
           </div>
         </div>
       )}
 
       {!product && !fetching && !showManual && (
-        <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%",marginTop:4}} onClick={onClose}>Cancel</button>
+        <button className="cancel" style={{width:"100%",marginTop:6,padding:12,borderRadius:8,border:"none",cursor:"pointer"}} onClick={onClose}>Cancel</button>
       )}
     </div>
   );
