@@ -41,7 +41,15 @@
   .add-form input,.add-form select{width:100%;padding:10px 14px;border:1px solid var(--sand);border-radius:8px;font-family:var(--font-body);font-size:13px;outline:none;margin-bottom:10px;color:var(--bark);background:#fff}
   .add-form .fetching{font-size:12px;color:var(--stone);font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:8px}
   .add-form .fetched-preview{display:flex;gap:12px;padding:12px;background:var(--warm);border-radius:8px;margin-bottom:12px;align-items:center}.add-form .fetched-preview img{width:60px;height:60px;object-fit:contain;border-radius:6px;background:#fff}.add-form .fetched-preview .fp-info{flex:1}.add-form .fetched-preview .fp-info h4{font-family:var(--font-display);font-size:15px;margin-bottom:2px}.add-form .fetched-preview .fp-info span{font-size:13px;font-weight:700}
-  .add-form .success-msg{font-size:13px;color:var(--sage);font-weight:600;margin-bottom:12px;padding:8px 12px;background:#eaf3e6;border-radius:8px}
+  .add-form .btn-row{display:flex;gap:8px;margin-top:8px}
+  .add-form .btn-primary{flex:1;padding:12px;border:none;border-radius:8px;background:#3b352e;color:#faf7f2;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:13px;font-weight:600}
+  .add-form .btn-secondary{padding:12px 20px;border:1px solid #e6ddd0;border-radius:8px;background:#fff;color:#c4b8a8;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:13px}
+  .add-form .btn-primary:hover{opacity:.85}.add-form .btn-secondary:hover{background:#f0ebe3}
+  .add-form .url-row{display:flex;gap:8px;margin-bottom:10px}
+  .add-form .url-row input{flex:1;margin-bottom:0}
+  .add-form .fetch-btn{padding:10px 18px;border:none;border-radius:8px;background:#3b352e;color:#faf7f2;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:13px;font-weight:600;white-space:nowrap}
+  .add-form .fetch-btn:hover{opacity:.85}
+  .add-form .fetch-btn:disabled{opacity:.5;cursor:not-allowed}
   .add-form .manual-fields{margin-top:8px;padding-top:12px;border-top:1px dashed var(--sand)}
   .add-form .manual-fields label{font-size:12px;color:var(--stone);display:block;margin-bottom:4px}
   .footer{margin-top:32px;text-align:center;font-size:11px;color:var(--stone);font-style:italic;line-height:1.8}.footer a{color:var(--stone)}
@@ -150,110 +158,72 @@ function AddItemForm(props) {
   var _e = useState(null), error = _e[0], setError = _e[1];
   var _sz = useState("Little Sister"), size = _sz[0], setSize = _sz[1];
   var _ok = useState(null), justAdded = _ok[0], setJustAdded = _ok[1];
-  var _manual = useState(false), showManual = _manual[0], setShowManual = _manual[1];
-  var _mn = useState(""), manualName = _mn[0], setManualName = _mn[1];
-  var _mp = useState(""), manualPrice = _mp[0], setManualPrice = _mp[1];
-  var timerRef = useRef(null);
-  var abortRef = useRef(null);
-  var lastFetchedUrl = useRef("");
 
-  function extractSlug(u) {
-    var m = u.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9-]+)/i);
+  function getSlug(u) {
+    var m = u.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9][a-z0-9-]*)/i);
     return m ? m[1] : null;
   }
 
-  function doFetch(inputUrl) {
-    var slug = extractSlug(inputUrl);
-    if (!slug) { console.log("[AddItem] No slug found in URL"); return; }
-    // Skip if we already fetched this exact slug
-    if (lastFetchedUrl.current === slug && product) {
-      console.log("[AddItem] Already fetched this slug, skipping");
-      return;
-    }
-    lastFetchedUrl.current = slug;
-    console.log("[AddItem] doFetch for slug:", slug);
-    if (abortRef.current) abortRef.current.cancelled = true;
-    var token = { cancelled: false };
-    abortRef.current = token;
+  function doFetch() {
+    var slug = getSlug(url);
+    if (!slug) { setError("Please paste a valid mailegusa.com product link."); return; }
     setFetching(true);
     setProduct(null);
     setError(null);
-    setShowManual(false);
-    fetchProductInfo(inputUrl)
-      .then(function(p) { console.log("[AddItem] Fetch success:", p.name); if (!token.cancelled) setProduct(p); })
-      .catch(function(err) {
-        console.log("[AddItem] Fetch failed:", err);
-        if (!token.cancelled) {
-          setShowManual(true);
-          setError("Auto-fetch didn't work \u2014 enter details manually below.");
-        }
+    var jsonUrl = BASE + "/products/" + slug + ".json";
+    fetch(jsonUrl)
+      .then(function(r) { return r.ok ? r.json() : Promise.reject("fail"); })
+      .catch(function() {
+        return fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(jsonUrl))
+          .then(function(r) { return r.ok ? r.json() : Promise.reject("proxy fail"); })
+          .then(function(d) { return JSON.parse(d.contents); });
       })
-      .finally(function() { if (!token.cancelled) setFetching(false); });
-  }
-
-  function handleUrlChange(e) {
-    var val = e.target.value;
-    setUrl(val);
-    setError(null);
-    setJustAdded(null);
-    setShowManual(false);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    var newSlug = extractSlug(val);
-    // If the slug is the same as what we already fetched, don't re-fetch
-    if (newSlug && newSlug === lastFetchedUrl.current && product) {
-      console.log("[AddItem] onChange same slug, keeping current product");
-      return;
-    }
-    if (newSlug) {
-      // New valid URL — clear old product and fetch
-      setProduct(null);
-      console.log("[AddItem] New URL, scheduling fetch in 600ms for slug:", newSlug);
-      timerRef.current = setTimeout(function() { doFetch(val); }, 600);
-    } else {
-      setProduct(null);
-    }
+      .then(function(d) {
+        var p = d && d.product;
+        if (!p) throw new Error("no product");
+        var img = (p.image && p.image.src) || (p.images && p.images[0] && p.images[0].src) || null;
+        var price = (p.variants && p.variants[0] && p.variants[0].price) ? parseFloat(p.variants[0].price) : null;
+        if (img) { imgStore[slug] = img; saveImgStore(); }
+        setProduct({ name: p.title, price: price, slug: slug, img: img });
+      })
+      .catch(function() { setError("Could not load product. Check the URL and try again."); })
+      .finally(function() { setFetching(false); });
   }
 
   function handleAdd() {
     if (!product || !product.name) return;
     if (existingSlugs.indexOf(product.slug) !== -1) { setError("Already in your catalog!"); return; }
     onAdd({ name: product.name, size: size, price: product.price, slug: product.slug, url: BASE + "/products/" + product.slug });
-    var added = product.name;
-    setUrl(""); setProduct(null); setError(null); setSize("Little Sister"); setJustAdded(added); setShowManual(false);
-    lastFetchedUrl.current = "";
-    if (abortRef.current) abortRef.current.cancelled = true;
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }
-
-  function handleManualAdd() {
-    if (!manualName.trim()) return;
-    var slug = extractSlug(url);
-    if (slug && existingSlugs.indexOf(slug) !== -1) { setError("Already in your catalog!"); return; }
-    onAdd({ name: manualName.trim(), size: size, price: manualPrice ? parseFloat(manualPrice) : null, slug: slug, url: slug ? BASE + "/products/" + slug : url });
-    var added = manualName.trim();
-    setUrl(""); setManualName(""); setManualPrice(""); setProduct(null); setError(null); setSize("Little Sister"); setShowManual(false); setJustAdded(added);
-    lastFetchedUrl.current = "";
-    if (abortRef.current) abortRef.current.cancelled = true;
-    if (timerRef.current) clearTimeout(timerRef.current);
+    setJustAdded(product.name);
+    setUrl("");
+    setProduct(null);
+    setError(null);
+    setSize("Little Sister");
   }
 
   var SZ = ["Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
+  var hasValidUrl = !!getSlug(url);
 
   return (
     <div className="add-form">
       <h3>Add Item</h3>
-      <div className="add-hint">Paste a mailegusa.com product link below — info loads automatically.</div>
+      <div className="add-hint">Paste a mailegusa.com product link, then click Load.</div>
 
-      {justAdded && <div className="success-msg">{"\u2713 Added \u201c" + justAdded + "\u201d \u2014 paste another link or close."}</div>}
+      {justAdded && <div className="success-msg">{"\u2713 Added \u201c" + justAdded + "\u201d \u2014 paste another link!"}</div>}
 
-      <input
-        placeholder="Paste any mailegusa.com product link..."
-        value={url}
-        onChange={handleUrlChange}
-        autoFocus
-      />
+      <div className="url-row">
+        <input
+          placeholder="Paste any mailegusa.com product link..."
+          value={url}
+          onChange={function(e) { setUrl(e.target.value); setJustAdded(null); }}
+          onKeyDown={function(e) { if (e.key === "Enter" && hasValidUrl && !fetching) { e.preventDefault(); doFetch(); } }}
+          autoFocus
+        />
+        <button className="fetch-btn" disabled={!hasValidUrl || fetching} onClick={doFetch}>
+          {fetching ? "..." : "Load"}
+        </button>
+      </div>
 
-      {fetching && <div className="fetching"><div className="loading" style={{width:16,height:16,borderWidth:2}}></div> Loading product info...</div>}
       {error && <p style={{fontSize:12,color:"#c07070",marginBottom:10}}>{error}</p>}
 
       {product && (
@@ -268,32 +238,17 @@ function AddItemForm(props) {
           <select value={size} onChange={function(e) { setSize(e.target.value); }}>
             {SZ.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
           </select>
-          <div className="modal-actions" style={{marginTop:6}}>
-            <button className="confirm" onClick={handleAdd}>Add to Wishlist</button>
-            <button className="cancel" onClick={onClose}>Done</button>
+          <div className="btn-row">
+            <button className="btn-primary" onClick={handleAdd}>Add to Wishlist</button>
+            <button className="btn-secondary" onClick={onClose}>Done</button>
           </div>
         </div>
       )}
 
-      {showManual && !product && (
-        <div className="manual-fields">
-          <label>Product name</label>
-          <input placeholder="e.g. Little Sister Mouse in Matchbox" value={manualName} onChange={function(e) { setManualName(e.target.value); }} />
-          <label>Price (optional)</label>
-          <input type="number" placeholder="e.g. 35" value={manualPrice} onChange={function(e) { setManualPrice(e.target.value); }} />
-          <label>Size</label>
-          <select value={size} onChange={function(e) { setSize(e.target.value); }}>
-            {SZ.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
-          </select>
-          <div className="modal-actions" style={{marginTop:6}}>
-            <button className="confirm" onClick={handleManualAdd}>Add to Wishlist</button>
-            <button className="cancel" onClick={onClose}>Done</button>
-          </div>
+      {!product && !fetching && (
+        <div className="btn-row">
+          <button className="btn-secondary" style={{width:"100%"}} onClick={onClose}>Cancel</button>
         </div>
-      )}
-
-      {!product && !fetching && !showManual && (
-        <button className="cancel" style={{width:"100%",marginTop:6,padding:12,borderRadius:8,border:"none",cursor:"pointer"}} onClick={onClose}>Cancel</button>
       )}
     </div>
   );
