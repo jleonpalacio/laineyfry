@@ -155,6 +155,7 @@ function AddItemForm(props) {
   var _mp = useState(""), manualPrice = _mp[0], setManualPrice = _mp[1];
   var timerRef = useRef(null);
   var abortRef = useRef(null);
+  var lastFetchedUrl = useRef("");
 
   function extractSlug(u) {
     var m = u.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9-]+)/i);
@@ -162,10 +163,15 @@ function AddItemForm(props) {
   }
 
   function doFetch(inputUrl) {
-    console.log("[AddItem] doFetch called with:", inputUrl);
-    if (!inputUrl) return;
-    var m = inputUrl.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9][\w-]*)/i);
-    if (!m) { console.log("[AddItem] URL did not match pattern"); return; }
+    var slug = extractSlug(inputUrl);
+    if (!slug) { console.log("[AddItem] No slug found in URL"); return; }
+    // Skip if we already fetched this exact slug
+    if (lastFetchedUrl.current === slug && product) {
+      console.log("[AddItem] Already fetched this slug, skipping");
+      return;
+    }
+    lastFetchedUrl.current = slug;
+    console.log("[AddItem] doFetch for slug:", slug);
     if (abortRef.current) abortRef.current.cancelled = true;
     var token = { cancelled: false };
     abortRef.current = token;
@@ -173,7 +179,6 @@ function AddItemForm(props) {
     setProduct(null);
     setError(null);
     setShowManual(false);
-    console.log("[AddItem] Starting fetchProductInfo...");
     fetchProductInfo(inputUrl)
       .then(function(p) { console.log("[AddItem] Fetch success:", p.name); if (!token.cancelled) setProduct(p); })
       .catch(function(err) {
@@ -188,18 +193,23 @@ function AddItemForm(props) {
 
   function handleUrlChange(e) {
     var val = e.target.value;
-    console.log("[AddItem] onChange:", val);
     setUrl(val);
     setError(null);
     setJustAdded(null);
     setShowManual(false);
-    // Don't clear product here — let doFetch handle it
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (val.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/[a-z0-9]/i)) {
-      console.log("[AddItem] URL looks valid, scheduling fetch in 600ms");
+    var newSlug = extractSlug(val);
+    // If the slug is the same as what we already fetched, don't re-fetch
+    if (newSlug && newSlug === lastFetchedUrl.current && product) {
+      console.log("[AddItem] onChange same slug, keeping current product");
+      return;
+    }
+    if (newSlug) {
+      // New valid URL — clear old product and fetch
+      setProduct(null);
+      console.log("[AddItem] New URL, scheduling fetch in 600ms for slug:", newSlug);
       timerRef.current = setTimeout(function() { doFetch(val); }, 600);
     } else {
-      // Not a valid URL — clear product preview
       setProduct(null);
     }
   }
@@ -210,7 +220,9 @@ function AddItemForm(props) {
     onAdd({ name: product.name, size: size, price: product.price, slug: product.slug, url: BASE + "/products/" + product.slug });
     var added = product.name;
     setUrl(""); setProduct(null); setError(null); setSize("Little Sister"); setJustAdded(added); setShowManual(false);
+    lastFetchedUrl.current = "";
     if (abortRef.current) abortRef.current.cancelled = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
   }
 
   function handleManualAdd() {
@@ -220,7 +232,9 @@ function AddItemForm(props) {
     onAdd({ name: manualName.trim(), size: size, price: manualPrice ? parseFloat(manualPrice) : null, slug: slug, url: slug ? BASE + "/products/" + slug : url });
     var added = manualName.trim();
     setUrl(""); setManualName(""); setManualPrice(""); setProduct(null); setError(null); setSize("Little Sister"); setShowManual(false); setJustAdded(added);
+    lastFetchedUrl.current = "";
     if (abortRef.current) abortRef.current.cancelled = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
   }
 
   var SZ = ["Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
