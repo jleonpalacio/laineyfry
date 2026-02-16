@@ -190,25 +190,17 @@ function AddItemForm(props) {
     var val = e.target.value;
     console.log("[AddItem] onChange:", val);
     setUrl(val);
-    setProduct(null);
     setError(null);
     setJustAdded(null);
     setShowManual(false);
+    // Don't clear product here — let doFetch handle it
     if (timerRef.current) clearTimeout(timerRef.current);
     if (val.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/[a-z0-9]/i)) {
-      console.log("[AddItem] URL looks valid, scheduling fetch in 500ms");
-      timerRef.current = setTimeout(function() { doFetch(val); }, 500);
-    }
-  }
-
-  // Also handle paste event directly as backup
-  function handlePaste(e) {
-    var pasted = e.clipboardData && e.clipboardData.getData("text");
-    if (pasted && pasted.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/[a-z0-9]/i)) {
-      console.log("[AddItem] onPaste detected valid URL:", pasted);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      // Small delay to let React update the input value first
-      setTimeout(function() { doFetch(pasted); }, 300);
+      console.log("[AddItem] URL looks valid, scheduling fetch in 600ms");
+      timerRef.current = setTimeout(function() { doFetch(val); }, 600);
+    } else {
+      // Not a valid URL — clear product preview
+      setProduct(null);
     }
   }
 
@@ -244,7 +236,6 @@ function AddItemForm(props) {
         placeholder="Paste any mailegusa.com product link..."
         value={url}
         onChange={handleUrlChange}
-        onPaste={handlePaste}
         autoFocus
       />
 
