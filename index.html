@@ -80,9 +80,10 @@
   .add-form .fetching{font-size:12px;color:var(--stone);font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:8px}
   .add-form .fetched-preview{display:flex;gap:12px;padding:12px;background:var(--warm);border-radius:8px;margin-bottom:12px;align-items:center}
   .add-form .fetched-preview img{width:60px;height:60px;object-fit:contain;border-radius:6px;background:#fff}
-  .add-form .fetched-preview .info{flex:1}
-  .add-form .fetched-preview .info h4{font-family:var(--font-display);font-size:15px;margin-bottom:2px}
-  .add-form .fetched-preview .info span{font-size:13px;font-weight:700}
+  .add-form .fetched-preview .fp-info{flex:1}
+  .add-form .fetched-preview .fp-info h4{font-family:var(--font-display);font-size:15px;margin-bottom:2px}
+  .add-form .fetched-preview .fp-info span{font-size:13px;font-weight:700}
+  .add-form .success-msg{font-size:13px;color:var(--sage);font-weight:600;margin-bottom:12px;padding:8px 12px;background:#eaf3e6;border-radius:8px}
   .footer{margin-top:32px;text-align:center;font-size:11px;color:var(--stone);font-style:italic;line-height:1.8}
   .footer a{color:var(--stone)}
   .empty{text-align:center;padding:60px 0;color:var(--stone)}.empty-icon{font-size:40px;margin-bottom:8px}
@@ -99,7 +100,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script type="text/babel">
-const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 const BASE = "https://www.mailegusa.com";
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAXU_d3F5D3GH7E9pJulldaBNjWOaykax0",
@@ -110,10 +111,12 @@ const FIREBASE_CONFIG = {
 let db = null;
 try { db = firebase.initializeApp(FIREBASE_CONFIG).database ? firebase.database() : null; } catch(e) {}
 
-// Image cache with localStorage persistence
-const IMG_KEY = "maileg-img-v2";
+// ========== IMAGE SYSTEM ==========
+const IMG_KEY = "maileg-img-v3";
 let imgStore = {};
 try { imgStore = JSON.parse(localStorage.getItem(IMG_KEY) || "{}"); } catch {}
+
+function saveImgStore() { try { localStorage.setItem(IMG_KEY, JSON.stringify(imgStore)); } catch {} }
 
 function prefetchImages(slugs, onUpdate) {
   const need = slugs.filter(s => s && !imgStore[s]);
@@ -124,43 +127,135 @@ function prefetchImages(slugs, onUpdate) {
     if (!b.length) return;
     i += 6;
     Promise.allSettled(b.map(slug =>
-      fetch(`${BASE}/products/${slug}.json`).then(r => r.ok ? r.json() : Promise.reject())
+      fetch(BASE + "/products/" + slug + ".json").then(r => r.ok ? r.json() : Promise.reject())
         .then(d => { imgStore[slug] = d?.product?.image?.src || d?.product?.images?.[0]?.src || "FAIL"; })
         .catch(() => { imgStore[slug] = "FAIL"; })
-    )).then(() => {
-      localStorage.setItem(IMG_KEY, JSON.stringify(imgStore));
-      onUpdate({ ...imgStore });
-      setTimeout(batch, 100);
-    });
+    )).then(() => { saveImgStore(); onUpdate(Object.assign({}, imgStore)); setTimeout(batch, 100); });
   }
   batch();
 }
 
-// Fetch product info from a mailegusa URL
-function fetchProductFromUrl(url) {
-  const m = url.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
-  if (!m) return Promise.reject("Not a mailegusa product URL");
-  const slug = m[1];
-  return fetch(`${BASE}/products/${slug}.json`).then(r => r.ok ? r.json() : Promise.reject())
-    .then(d => {
-      const p = d?.product;
-      if (!p) throw new Error("No product data");
-      const img = p.image?.src || p.images?.[0]?.src || null;
-      const price = p.variants?.[0]?.price ? parseFloat(p.variants[0].price) : null;
-      // Cache image
-      if (img) { imgStore[slug] = img; localStorage.setItem(IMG_KEY, JSON.stringify(imgStore)); }
-      return { name: p.title, price, slug, img };
+function fetchProductInfo(url) {
+  var m = url.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
+  if (!m) return Promise.reject("bad url");
+  var slug = m[1];
+  return fetch(BASE + "/products/" + slug + ".json")
+    .then(function(r) { return r.ok ? r.json() : Promise.reject("404"); })
+    .then(function(d) {
+      var p = d && d.product;
+      if (!p) throw new Error("no product");
+      var img = (p.image && p.image.src) || (p.images && p.images[0] && p.images[0].src) || null;
+      var price = (p.variants && p.variants[0] && p.variants[0].price) ? parseFloat(p.variants[0].price) : null;
+      if (img) { imgStore[slug] = img; saveImgStore(); }
+      return { name: p.title, price: price, slug: slug, img: img };
     });
 }
 
 function ProductImage({ slug, name, images }) {
   if (!slug) return <span className="fallback">🐭</span>;
-  const c = images[slug];
+  var c = images[slug];
   if (!c) return <div className="loading"></div>;
   if (c === "FAIL") return <span className="fallback">🐭</span>;
-  return <img src={c} alt={name} loading="lazy" onError={e => { e.target.style.display='none'; e.target.parentNode.innerHTML='<span class="fallback">🐭</span>'; }} />;
+  return <img src={c} alt={name} loading="lazy" onError={function(e) { e.target.style.display='none'; e.target.parentNode.innerHTML='<span class="fallback">🐭</span>'; }} />;
 }
 
+// ========== ADD ITEM FORM (isolated component) ==========
+function AddItemForm({ onAdd, onClose, existingSlugs }) {
+  var _s = useState(""), url = _s[0], setUrl = _s[1];
+  var _f = useState(false), fetching = _f[0], setFetching = _f[1];
+  var _p = useState(null), product = _p[0], setProduct = _p[1];
+  var _e = useState(null), error = _e[0], setError = _e[1];
+  var _sz = useState("Little Sister"), size = _sz[0], setSize = _sz[1];
+  var _ok = useState(null), justAdded = _ok[0], setJustAdded = _ok[1];
+  var abortRef = useRef(null);
+
+  function doFetch(inputUrl) {
+    setUrl(inputUrl);
+    setProduct(null);
+    setError(null);
+    setJustAdded(null);
+    if (!inputUrl.includes("mailegusa.com/products/")) return;
+
+    // Cancel any previous fetch
+    if (abortRef.current) abortRef.current.cancelled = true;
+    var token = { cancelled: false };
+    abortRef.current = token;
+
+    setFetching(true);
+    fetchProductInfo(inputUrl)
+      .then(function(p) { if (!token.cancelled) setProduct(p); })
+      .catch(function() { if (!token.cancelled) setError("Couldn't load — check the URL."); })
+      .finally(function() { if (!token.cancelled) setFetching(false); });
+  }
+
+  function handleAdd() {
+    if (!product || !product.name) return;
+    if (existingSlugs.indexOf(product.slug) !== -1) {
+      setError("Already in your catalog!");
+      return;
+    }
+    onAdd({
+      name: product.name,
+      size: size,
+      price: product.price,
+      slug: product.slug,
+      url: BASE + "/products/" + product.slug
+    });
+    var addedName = product.name;
+    // Clear form for next add
+    setUrl("");
+    setProduct(null);
+    setError(null);
+    setSize("Little Sister");
+    setJustAdded(addedName);
+    if (abortRef.current) abortRef.current.cancelled = true;
+  }
+
+  var SIZES = ["Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
+
+  return (
+    <div className="add-form">
+      <h3>Add Item</h3>
+
+      {justAdded && <div className="success-msg">✓ Added "{justAdded}" — paste another link or close.</div>}
+
+      <input
+        placeholder="Paste a mailegusa.com product link..."
+        value={url}
+        onChange={function(e) { doFetch(e.target.value); }}
+        autoFocus
+      />
+
+      {fetching && <div className="fetching"><div className="loading" style={{width:16,height:16,borderWidth:2}}></div> Loading product info...</div>}
+      {error && <p style={{fontSize:12,color:"#c07070",marginBottom:10}}>{error}</p>}
+
+      {product && (
+        <div>
+          <div className="fetched-preview">
+            {product.img && <img src={product.img} alt="" />}
+            <div className="fp-info">
+              <h4>{product.name}</h4>
+              {product.price && <span>${product.price}</span>}
+            </div>
+          </div>
+          <select value={size} onChange={function(e) { setSize(e.target.value); }}>
+            {SIZES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+          </select>
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={handleAdd}>Add to Wishlist</button>
+            <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={onClose}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {!product && !fetching && (
+        <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%",marginTop:4}} onClick={onClose}>Cancel</button>
+      )}
+    </div>
+  );
+}
+
+// ========== CATALOG ==========
 const CATALOG = [
   { id:"baby-twins", name:"Twins, Baby Mice in Matchbox", size:"Baby", coll:"Mice in Boxes", price:38, slug:"twins-baby-mice-in-matchbox" },
   { id:"sleepy-rose", name:"Sleepy Wakey Baby Mouse - Rose", size:"Baby", coll:"Baby Mice", price:27, slug:"sleepy-wakey-baby-mouse-in-matchbox-rose" },
@@ -225,260 +320,272 @@ const CATALOG = [
 
 const SIZES = ["All","Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
 
+// ========== MAIN APP ==========
 function App() {
-  const params = new URLSearchParams(window.location.search);
-  const isGiftView = params.get("view") === "wishlist";
-  const [items, setItems] = useState(() => CATALOG.map(i => ({ ...i, status: "none" })));
-  const [claims, setClaims] = useState({});
-  const [search, setSearch] = useState("");
-  const [sizeFilter, setSizeFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [view, setView] = useState(isGiftView ? "wishlist" : "collection");
-  const [showAdd, setShowAdd] = useState(false);
-  const [addUrl, setAddUrl] = useState("");
-  const [addSize, setAddSize] = useState("Little Sister");
-  const [fetching, setFetching] = useState(false);
-  const [fetchedProduct, setFetchedProduct] = useState(null);
-  const [fetchError, setFetchError] = useState(null);
-  const fetchRef = useRef(0); // track fetch attempts to avoid stale results
-  const [toast, setToast] = useState(null);
-  const [claimModal, setClaimModal] = useState(null);
-  const [deleteModal, setDeleteModal] = useState(null);
-  const [unclaimModal, setUnclaimModal] = useState(null);
-  const [buyerName, setBuyerName] = useState(() => localStorage.getItem("maileg-buyer") || "");
-  const [copied, setCopied] = useState(false);
-  const [images, setImages] = useState(imgStore);
+  var params = new URLSearchParams(window.location.search);
+  var isGiftView = params.get("view") === "wishlist";
 
-  useEffect(() => {
+  var _items = useState(function() { return CATALOG.map(function(i) { return Object.assign({}, i, { status: "none" }); }); });
+  var items = _items[0], setItems = _items[1];
+  var _claims = useState({}), claims = _claims[0], setClaims = _claims[1];
+  var _search = useState(""), search = _search[0], setSearch = _search[1];
+  var _sf = useState("All"), sizeFilter = _sf[0], setSizeFilter = _sf[1];
+  var _stf = useState("All"), statusFilter = _stf[0], setStatusFilter = _stf[1];
+  var _view = useState(isGiftView ? "wishlist" : "collection"), view = _view[0], setView = _view[1];
+  var _showAdd = useState(false), showAdd = _showAdd[0], setShowAdd = _showAdd[1];
+  var _addKey = useState(0), addKey = _addKey[0], setAddKey = _addKey[1]; // forces AddItemForm remount
+  var _toast = useState(null), toast = _toast[0], setToast = _toast[1];
+  var _claimModal = useState(null), claimModal = _claimModal[0], setClaimModal = _claimModal[1];
+  var _deleteModal = useState(null), deleteModal = _deleteModal[0], setDeleteModal = _deleteModal[1];
+  var _unclaimModal = useState(null), unclaimModal = _unclaimModal[0], setUnclaimModal = _unclaimModal[1];
+  var _buyerName = useState(function() { return localStorage.getItem("maileg-buyer") || ""; }), buyerName = _buyerName[0], setBuyerName = _buyerName[1];
+  var _copied = useState(false), copied = _copied[0], setCopied = _copied[1];
+  var _images = useState(imgStore), images = _images[0], setImages = _images[1];
+
+  // Load saved data
+  useEffect(function() {
     try {
-      const saved = JSON.parse(localStorage.getItem("maileg-data-v3") || "null");
+      var saved = JSON.parse(localStorage.getItem("maileg-data-v3") || "null");
       if (saved) {
-        const merged = CATALOG.map(i => ({ ...i, status: saved.statuses?.[i.id] || "none" }));
-        setItems([...merged, ...(saved.custom || [])]);
+        var merged = CATALOG.map(function(i) { return Object.assign({}, i, { status: saved.statuses && saved.statuses[i.id] || "none" }); });
+        var custom = saved.custom || [];
+        setItems(merged.concat(custom));
       }
-    } catch {}
+    } catch(e) {}
   }, []);
 
-  useEffect(() => { prefetchImages(CATALOG.map(i => i.slug).filter(Boolean), setImages); }, []);
-  useEffect(() => { if(!db) return; const r=db.ref("maileg-claims"); r.on("value",s=>setClaims(s.val()||{})); return()=>r.off(); }, []);
+  // Prefetch catalog images
+  useEffect(function() {
+    prefetchImages(CATALOG.map(function(i) { return i.slug; }).filter(Boolean), setImages);
+  }, []);
 
-  const saveData = items => {
-    const statuses = {}; const custom = [];
-    items.forEach(i => { if(i.status!=="none") statuses[i.id]=i.status; if(i.isCustom) custom.push(i); });
-    localStorage.setItem("maileg-data-v3", JSON.stringify({ statuses, custom }));
-  };
+  // Firebase claims listener
+  useEffect(function() {
+    if (!db) return;
+    var ref = db.ref("maileg-claims");
+    ref.on("value", function(snap) { setClaims(snap.val() || {}); });
+    return function() { ref.off(); };
+  }, []);
 
-  const showToastMsg = m => { setToast(m); setTimeout(()=>setToast(null),2000); };
-  const cycleStatus = id => {
-    setItems(p => { const n=p.map(i=>i.id!==id?i:{...i,status:["none","owned","wishlist"][(["none","owned","wishlist"].indexOf(i.status)+1)%3]}); saveData(n); showToastMsg({owned:"✓ Owned",wishlist:"♡ Wishlist",none:"Cleared"}[n.find(i=>i.id===id).status]); return n; });
-  };
-  const deleteItem = id => { setItems(p=>{const n=p.filter(i=>i.id!==id);saveData(n);return n;}); setDeleteModal(null); showToastMsg("Removed"); };
+  function saveData(itemsList) {
+    var statuses = {};
+    var custom = [];
+    itemsList.forEach(function(i) {
+      if (i.status !== "none") statuses[i.id] = i.status;
+      if (i.isCustom) custom.push(i);
+    });
+    localStorage.setItem("maileg-data-v3", JSON.stringify({ statuses: statuses, custom: custom }));
+  }
 
-  // Claim (gift view) - only stores buyer name in Firebase, not shown publicly
-  const handleClaim = () => {
-    if(!buyerName.trim()||!claimModal) return;
+  function showToastMsg(m) { setToast(m); setTimeout(function() { setToast(null); }, 2000); }
+
+  function cycleStatus(id) {
+    setItems(function(prev) {
+      var order = ["none","owned","wishlist"];
+      var next = prev.map(function(i) {
+        if (i.id !== id) return i;
+        return Object.assign({}, i, { status: order[(order.indexOf(i.status) + 1) % 3] });
+      });
+      saveData(next);
+      var item = next.find(function(i) { return i.id === id; });
+      var labels = { owned: "✓ Owned", wishlist: "♡ Wishlist", none: "Cleared" };
+      showToastMsg(labels[item.status]);
+      return next;
+    });
+  }
+
+  function deleteItem(id) {
+    setItems(function(prev) {
+      var next = prev.filter(function(i) { return i.id !== id; });
+      saveData(next);
+      return next;
+    });
+    setDeleteModal(null);
+    showToastMsg("Removed");
+  }
+
+  function handleClaim() {
+    if (!buyerName.trim() || !claimModal) return;
     localStorage.setItem("maileg-buyer", buyerName);
-    const data = { by: buyerName.trim(), at: Date.now() };
-    if(db) db.ref(`maileg-claims/${claimModal}`).set(data);
-    else setClaims(p=>({...p,[claimModal]:data}));
+    var data = { by: buyerName.trim(), at: Date.now() };
+    if (db) db.ref("maileg-claims/" + claimModal).set(data);
+    else setClaims(function(p) { var n = Object.assign({}, p); n[claimModal] = data; return n; });
     showToastMsg("Marked as bought!");
     setClaimModal(null);
-  };
+  }
 
-  // Unclaim - anyone can do it
-  const handleUnclaim = () => {
-    if(!unclaimModal) return;
-    if(db) db.ref(`maileg-claims/${unclaimModal}`).remove();
-    else setClaims(p=>{const n={...p};delete n[unclaimModal];return n;});
+  function handleUnclaim() {
+    if (!unclaimModal) return;
+    if (db) db.ref("maileg-claims/" + unclaimModal).remove();
+    else setClaims(function(p) { var n = Object.assign({}, p); delete n[unclaimModal]; return n; });
     showToastMsg("Unmarked — available again");
     setUnclaimModal(null);
-  };
+  }
 
-  const shareWishlist = () => {
-    navigator.clipboard.writeText(location.origin+location.pathname+"?view=wishlist")
-      .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),3000);});
-  };
+  function shareWishlist() {
+    navigator.clipboard.writeText(location.origin + location.pathname + "?view=wishlist")
+      .then(function() { setCopied(true); setTimeout(function() { setCopied(false); }, 3000); });
+  }
 
-  // Reset add form completely
-  const resetAdd = () => {
-    setShowAdd(false);
-    setAddUrl("");
-    setFetchedProduct(null);
-    setFetchError(null);
-    setFetching(false);
-    setAddSize("Little Sister");
-    fetchRef.current++;
-  };
-
-  // Auto-fetch product from URL
-  const handleUrlPaste = (url) => {
-    setAddUrl(url);
-    setFetchedProduct(null);
-    setFetchError(null);
-    if (!url.includes("mailegusa.com/products/")) return;
-    setFetching(true);
-    const thisFetch = ++fetchRef.current;
-    fetchProductFromUrl(url)
-      .then(p => { if (fetchRef.current === thisFetch) { setFetchedProduct(p); setImages({...imgStore}); } })
-      .catch(() => { if (fetchRef.current === thisFetch) setFetchError("Couldn't load product — check the URL and try again."); })
-      .finally(() => { if (fetchRef.current === thisFetch) setFetching(false); });
-  };
-
-  const addProduct = () => {
-    const fp = fetchedProduct;
-    if (!fp?.name) return;
-    if (items.find(i => i.slug === fp.slug)) { showToastMsg("Already in catalog!"); return; }
-    setItems(p => {
-      const n = [...p, { id: `c-${Date.now()}`, name: fp.name, size: addSize, coll: "Custom", price: fp.price, slug: fp.slug, url: `${BASE}/products/${fp.slug}`, status: "wishlist", isCustom: true }];
-      saveData(n); return n;
+  function handleAddItem(info) {
+    setItems(function(prev) {
+      var newItem = {
+        id: "c-" + Date.now(),
+        name: info.name,
+        size: info.size,
+        coll: "Custom",
+        price: info.price,
+        slug: info.slug,
+        url: info.url,
+        status: "wishlist",
+        isCustom: true
+      };
+      var next = prev.concat([newItem]);
+      saveData(next);
+      // Also make sure image is available
+      setImages(Object.assign({}, imgStore));
+      return next;
     });
     showToastMsg("Added to wishlist!");
-    // Reset form but keep it OPEN for adding more
-    setAddUrl("");
-    setFetchedProduct(null);
-    setFetchError(null);
-    setAddSize("Little Sister");
-    fetchRef.current++;
-  };
+  }
 
-  const filtered = useMemo(() => items.filter(item => {
-    if(isGiftView && item.status!=="wishlist") return false;
-    if(view==="wishlist" && !isGiftView && item.status!=="wishlist") return false;
-    if(search){const q=search.toLowerCase();if(!item.name.toLowerCase().includes(q)&&!(item.coll||"").toLowerCase().includes(q))return false;}
-    if(sizeFilter!=="All"&&item.size!==sizeFilter) return false;
-    if(!isGiftView&&view==="collection"){
-      if(statusFilter==="Owned"&&item.status!=="owned")return false;
-      if(statusFilter==="Wishlist"&&item.status!=="wishlist")return false;
-      if(statusFilter==="Unmarked"&&item.status!=="none")return false;
-    }
-    return true;
-  }), [items,search,sizeFilter,statusFilter,view,isGiftView]);
+  var existingSlugs = useMemo(function() { return items.map(function(i) { return i.slug; }).filter(Boolean); }, [items]);
 
-  const stats = useMemo(() => ({
-    total:items.length, owned:items.filter(i=>i.status==="owned").length,
-    wishlist:items.filter(i=>i.status==="wishlist").length,
-    wVal:items.filter(i=>i.status==="wishlist"&&i.price).reduce((a,i)=>a+i.price,0),
-    oVal:items.filter(i=>i.status==="owned"&&i.price).reduce((a,i)=>a+i.price,0),
-  }), [items]);
+  var filtered = useMemo(function() {
+    return items.filter(function(item) {
+      if (isGiftView && item.status !== "wishlist") return false;
+      if (view === "wishlist" && !isGiftView && item.status !== "wishlist") return false;
+      if (search) {
+        var q = search.toLowerCase();
+        if (item.name.toLowerCase().indexOf(q) === -1 && (item.coll || "").toLowerCase().indexOf(q) === -1) return false;
+      }
+      if (sizeFilter !== "All" && item.size !== sizeFilter) return false;
+      if (!isGiftView && view === "collection") {
+        if (statusFilter === "Owned" && item.status !== "owned") return false;
+        if (statusFilter === "Wishlist" && item.status !== "wishlist") return false;
+        if (statusFilter === "Unmarked" && item.status !== "none") return false;
+      }
+      return true;
+    });
+  }, [items, search, sizeFilter, statusFilter, view, isGiftView]);
 
-  const wishlistClaimed = Object.keys(claims).filter(id=>items.find(i=>i.id===id)?.status==="wishlist").length;
+  var stats = useMemo(function() {
+    return {
+      total: items.length,
+      owned: items.filter(function(i) { return i.status === "owned"; }).length,
+      wishlist: items.filter(function(i) { return i.status === "wishlist"; }).length,
+      wVal: items.filter(function(i) { return i.status === "wishlist" && i.price; }).reduce(function(a, i) { return a + i.price; }, 0),
+      oVal: items.filter(function(i) { return i.status === "owned" && i.price; }).reduce(function(a, i) { return a + i.price; }, 0),
+    };
+  }, [items]);
+
+  var wishlistClaimed = Object.keys(claims).filter(function(id) {
+    return items.find(function(i) { return i.id === id && i.status === "wishlist"; });
+  }).length;
 
   return (
     <div className="app">
       {toast && <div className="toast">{toast}</div>}
 
-      {/* Claim Modal */}
-      {claimModal && <div className="modal-overlay" onClick={()=>setClaimModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      {claimModal && <div className="modal-overlay" onClick={function() { setClaimModal(null); }}><div className="modal" onClick={function(e) { e.stopPropagation(); }}>
         <h3>I'm buying this! 🎁</h3>
-        <p>Enter your name so we can track claims. <strong>Your name won't be shown publicly</strong> — others will just see it's been claimed.</p>
-        <input placeholder="Your name" value={buyerName} onChange={e=>setBuyerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleClaim()} autoFocus />
-        <div className="modal-actions"><button className="confirm" onClick={handleClaim}>Claim it!</button><button className="cancel" onClick={()=>setClaimModal(null)}>Cancel</button></div>
+        <p>Enter your name to track the claim. <strong>Your name won't be shown publicly</strong> — others just see it's been claimed.</p>
+        <input placeholder="Your name" value={buyerName} onChange={function(e) { setBuyerName(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") handleClaim(); }} autoFocus />
+        <div className="modal-actions"><button className="confirm" onClick={handleClaim}>Claim it!</button><button className="cancel" onClick={function() { setClaimModal(null); }}>Cancel</button></div>
       </div></div>}
 
-      {/* Unclaim Modal */}
-      {unclaimModal && <div className="modal-overlay" onClick={()=>setUnclaimModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      {unclaimModal && <div className="modal-overlay" onClick={function() { setUnclaimModal(null); }}><div className="modal" onClick={function(e) { e.stopPropagation(); }}>
         <h3>Remove claim?</h3>
         <p>This will mark the item as available again so someone else can buy it.</p>
-        <div className="modal-actions"><button className="danger" onClick={handleUnclaim}>Yes, unclaim it</button><button className="cancel" onClick={()=>setUnclaimModal(null)}>Keep claim</button></div>
+        <div className="modal-actions"><button className="danger" onClick={handleUnclaim}>Yes, unclaim it</button><button className="cancel" onClick={function() { setUnclaimModal(null); }}>Keep claim</button></div>
       </div></div>}
 
-      {/* Delete Modal */}
-      {deleteModal && <div className="modal-overlay" onClick={()=>setDeleteModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <h3>Remove from catalog?</h3><p>This will remove <strong>{items.find(i=>i.id===deleteModal)?.name}</strong> from your tracker.</p>
-        <div className="modal-actions"><button className="danger" onClick={()=>deleteItem(deleteModal)}>Remove</button><button className="cancel" onClick={()=>setDeleteModal(null)}>Keep it</button></div>
+      {deleteModal && <div className="modal-overlay" onClick={function() { setDeleteModal(null); }}><div className="modal" onClick={function(e) { e.stopPropagation(); }}>
+        <h3>Remove from catalog?</h3>
+        <p>This will remove <strong>{(items.find(function(i) { return i.id === deleteModal; }) || {}).name}</strong> from your tracker.</p>
+        <div className="modal-actions"><button className="danger" onClick={function() { deleteItem(deleteModal); }}>Remove</button><button className="cancel" onClick={function() { setDeleteModal(null); }}>Keep it</button></div>
       </div></div>}
 
       <header className="header">
-        <div className="header-top"><span className="logo">🐭</span><div><h1 className="title">{isGiftView?"Elena's Maileg Wishlist":"Elena's Maileg Collection"}</h1><p className="subtitle">{isGiftView?"Pick a gift to claim — she'll love any of these!":"A tiny world, carefully curated"}</p></div></div>
+        <div className="header-top"><span className="logo">🐭</span><div><h1 className="title">{isGiftView ? "Elena's Maileg Wishlist" : "Elena's Maileg Collection"}</h1><p className="subtitle">{isGiftView ? "Pick a gift to claim — she'll love any of these!" : "A tiny world, carefully curated"}</p></div></div>
         <div className="stats">
-          {isGiftView ? <>
+          {isGiftView ? (<>
             <div className="stat"><div className="stat-num" style={{color:"var(--coral)"}}>{stats.wishlist}</div><div className="stat-label">on wishlist</div></div>
             <div className="stat"><div className="stat-num" style={{color:"#7a5ab0"}}>{wishlistClaimed}</div><div className="stat-label">claimed</div></div>
-            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{Math.max(0,stats.wishlist-wishlistClaimed)}</div><div className="stat-label">available</div></div>
-          </> : <>
+            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{Math.max(0, stats.wishlist - wishlistClaimed)}</div><div className="stat-label">available</div></div>
+          </>) : (<>
             <div className="stat"><div className="stat-num">{stats.total}</div><div className="stat-label">catalog</div></div>
-            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{stats.owned}</div><div className="stat-label">owned</div>{stats.oVal>0&&<div className="stat-sub" style={{color:"var(--sage)"}}>${stats.oVal}</div>}</div>
-            <div className="stat"><div className="stat-num" style={{color:"var(--coral)"}}>{stats.wishlist}</div><div className="stat-label">wishlist</div>{stats.wVal>0&&<div className="stat-sub" style={{color:"var(--coral)"}}>${stats.wVal}</div>}</div>
-          </>}
+            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{stats.owned}</div><div className="stat-label">owned</div>{stats.oVal > 0 && <div className="stat-sub" style={{color:"var(--sage)"}}>${stats.oVal}</div>}</div>
+            <div className="stat"><div className="stat-num" style={{color:"var(--coral)"}}>{stats.wishlist}</div><div className="stat-label">wishlist</div>{stats.wVal > 0 && <div className="stat-sub" style={{color:"var(--coral)"}}>${stats.wVal}</div>}</div>
+          </>)}
         </div>
-        {isGiftView&&<div className="mode-banner">🎁 <strong>Gift mode</strong> — Claim a gift so others know it's taken. Changed your mind? You can unclaim anytime.</div>}
+        {isGiftView && <div className="mode-banner">🎁 <strong>Gift mode</strong> — Claim a gift so others know it's taken. Changed your mind? You can unclaim anytime.</div>}
       </header>
 
-      {!isGiftView&&<>
-        <nav className="nav"><button className={`nav-btn ${view==="collection"?"active":""}`} onClick={()=>setView("collection")}>Full Collection</button><button className={`nav-btn ${view==="wishlist"?"active":""}`} onClick={()=>setView("wishlist")}>♡ Wishlist ({stats.wishlist})</button></nav>
-        <div className="share-bar"><button className="share-btn primary" onClick={shareWishlist}>📋 Copy Wishlist Link</button>{copied&&<span className="share-copied">✓ Copied!</span>}</div>
-      </>}
+      {!isGiftView && (<>
+        <nav className="nav">
+          <button className={"nav-btn" + (view === "collection" ? " active" : "")} onClick={function() { setView("collection"); }}>Full Collection</button>
+          <button className={"nav-btn" + (view === "wishlist" ? " active" : "")} onClick={function() { setView("wishlist"); }}>♡ Wishlist ({stats.wishlist})</button>
+        </nav>
+        <div className="share-bar"><button className="share-btn primary" onClick={shareWishlist}>📋 Copy Wishlist Link</button>{copied && <span className="share-copied">✓ Copied!</span>}</div>
+      </>)}
 
       <div className="filters">
-        <input className="search" placeholder="Search by name or collection..." value={search} onChange={e=>setSearch(e.target.value)} />
-        <div className="pills">{SIZES.map(s=><button key={s} className={`pill ${sizeFilter===s?"active":""}`} onClick={()=>setSizeFilter(s)}>{s}</button>)}</div>
-        {!isGiftView&&view==="collection"&&<div className="pills">{["All","Owned","Wishlist","Unmarked"].map(s=><button key={s} className={`pill ${statusFilter===s?"active":""}`} onClick={()=>setStatusFilter(s)}>{s}</button>)}</div>}
+        <input className="search" placeholder="Search by name or collection..." value={search} onChange={function(e) { setSearch(e.target.value); }} />
+        <div className="pills">{SIZES.map(function(s) { return <button key={s} className={"pill" + (sizeFilter === s ? " active" : "")} onClick={function() { setSizeFilter(s); }}>{s}</button>; })}</div>
+        {!isGiftView && view === "collection" && <div className="pills">{["All","Owned","Wishlist","Unmarked"].map(function(s) { return <button key={s} className={"pill" + (statusFilter === s ? " active" : "")} onClick={function() { setStatusFilter(s); }}>{s}</button>; })}</div>}
       </div>
 
       <div className="grid">
-        {filtered.map(item=>{const claim=claims[item.id];const isClaimed=!!claim;return(
-          <div key={item.id} className={`card ${item.status} ${isClaimed&&isGiftView?"claimed":""}`}>
-            <div className="card-img"><ProductImage slug={item.slug} name={item.name} images={images} /></div>
-            <div className="card-body">
-              <div className="card-name">{item.name}</div>
-              <div className="card-meta">
-                <span className="tag tag-size">{item.size}</span>
-                {item.coll&&<span className="tag tag-coll">{item.coll}</span>}
-                {item.price&&<span className="price">${item.price}</span>}
-                {isClaimed&&isGiftView&&<span className="tag tag-claimed">Claimed ✓</span>}
-              </div>
-              {isClaimed&&isGiftView&&<div className="claimed-by">🎁 Someone's buying this one!</div>}
-              <div className="card-actions">
-                {!isGiftView&&<button className={`status-btn ${item.status}`} onClick={()=>cycleStatus(item.id)}>{item.status==="owned"?"✓ Owned":item.status==="wishlist"?"♡ Wishlist":"○ Mark"}</button>}
-
-                {/* Gift view: claim or unclaim */}
-                {isGiftView&&!isClaimed&&<button className="claim-btn" onClick={()=>setClaimModal(item.id)}>🎁 I'll buy this!</button>}
-                {isGiftView&&isClaimed&&<button className="unclaim-btn" onClick={()=>setUnclaimModal(item.id)}>Unclaim</button>}
-
-                {(item.slug||item.url)&&<a className="shop-link" href={item.slug?`${BASE}/products/${item.slug}`:item.url} target="_blank" rel="noopener noreferrer">Shop →</a>}
-                {!isGiftView&&<button className="del-btn" onClick={()=>setDeleteModal(item.id)}>✕</button>}
+        {filtered.map(function(item) {
+          var claim = claims[item.id];
+          var isClaimed = !!claim;
+          return (
+            <div key={item.id} className={"card " + item.status + (isClaimed && isGiftView ? " claimed" : "")}>
+              <div className="card-img"><ProductImage slug={item.slug} name={item.name} images={images} /></div>
+              <div className="card-body">
+                <div className="card-name">{item.name}</div>
+                <div className="card-meta">
+                  <span className="tag tag-size">{item.size}</span>
+                  {item.coll && <span className="tag tag-coll">{item.coll}</span>}
+                  {item.price && <span className="price">${item.price}</span>}
+                  {isClaimed && isGiftView && <span className="tag tag-claimed">Claimed ✓</span>}
+                </div>
+                {isClaimed && isGiftView && <div className="claimed-by">🎁 Someone's buying this one!</div>}
+                <div className="card-actions">
+                  {!isGiftView && <button className={"status-btn " + item.status} onClick={function() { cycleStatus(item.id); }}>{item.status === "owned" ? "✓ Owned" : item.status === "wishlist" ? "♡ Wishlist" : "○ Mark"}</button>}
+                  {isGiftView && !isClaimed && <button className="claim-btn" onClick={function() { setClaimModal(item.id); }}>🎁 I'll buy this!</button>}
+                  {isGiftView && isClaimed && <button className="unclaim-btn" onClick={function() { setUnclaimModal(item.id); }}>Unclaim</button>}
+                  {(item.slug || item.url) && <a className="shop-link" href={item.slug ? BASE + "/products/" + item.slug : item.url} target="_blank" rel="noopener noreferrer">Shop →</a>}
+                  {!isGiftView && <button className="del-btn" onClick={function() { setDeleteModal(item.id); }}>✕</button>}
+                </div>
               </div>
             </div>
-          </div>
-        );})}
-        {filtered.length===0&&<div className="empty"><div className="empty-icon">🔍</div>No items match your filters</div>}
+          );
+        })}
+        {filtered.length === 0 && <div className="empty"><div className="empty-icon">🔍</div>No items match your filters</div>}
       </div>
 
-      {/* Add item — now with smart URL fetch */}
-      {!isGiftView&&<div className="add-section">
-        {!showAdd?<button className="add-btn" onClick={()=>{resetAdd();setShowAdd(true);}}>+ Add from mailegusa.com Link</button>:
-        <div className="add-form"><h3>Add Item</h3>
-          <input placeholder="Paste a mailegusa.com product link..." value={addUrl} onChange={e=>handleUrlPaste(e.target.value)} />
+      {!isGiftView && (
+        <div className="add-section">
+          {!showAdd ? (
+            <button className="add-btn" onClick={function() { setAddKey(function(k) { return k + 1; }); setShowAdd(true); }}>+ Add from mailegusa.com Link</button>
+          ) : (
+            <AddItemForm
+              key={addKey}
+              onAdd={handleAddItem}
+              onClose={function() { setShowAdd(false); }}
+              existingSlugs={existingSlugs}
+            />
+          )}
+        </div>
+      )}
 
-          {fetching && <div className="fetching"><div className="loading" style={{width:16,height:16,borderWidth:2}}></div> Loading product info...</div>}
-          {fetchError && <p style={{fontSize:12,color:"#c07070",marginBottom:10}}>{fetchError}</p>}
-
-          {fetchedProduct && <div className="fetched-preview">
-            {fetchedProduct.img && <img src={fetchedProduct.img} alt="" />}
-            <div className="info">
-              <h4>{fetchedProduct.name}</h4>
-              {fetchedProduct.price && <span>${fetchedProduct.price}</span>}
-            </div>
-          </div>}
-
-          {fetchedProduct && <>
-            <select value={addSize} onChange={e=>setAddSize(e.target.value)} style={{marginBottom:12}}>
-              {SIZES.filter(s=>s!=="All").map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <div style={{display:"flex",gap:8}}>
-              <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={addProduct}>Add to Wishlist</button>
-              <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={resetAdd}>Cancel</button>
-            </div>
-          </>}
-
-          {!fetchedProduct && !fetching && <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%"}} onClick={resetAdd}>Cancel</button>}
-        </div>}
-      </div>}
-
-      <footer className="footer"><p>Prices & images from <a href={BASE} target="_blank">mailegusa.com</a></p>{!isGiftView&&<p>Share the wishlist link with family!</p>}</footer>
+      <footer className="footer"><p>Prices & images from <a href={BASE} target="_blank">mailegusa.com</a></p>{!isGiftView && <p>Share the wishlist link with family!</p>}</footer>
     </div>
   );
 }
+
 ReactDOM.render(<App />, document.getElementById("root"));
 </script>
 </body>
