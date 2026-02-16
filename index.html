@@ -116,13 +116,17 @@ function fetchProductInfo(url) {
   }
 
   // Try direct fetch first
+  console.log("[fetchProductInfo] Trying direct:", jsonUrl);
   return fetch(jsonUrl)
-    .then(function(r) { return r.ok ? r.json() : Promise.reject("direct failed"); })
+    .then(function(r) { console.log("[fetchProductInfo] Direct response:", r.status); return r.ok ? r.json() : Promise.reject("direct failed " + r.status); })
     .then(parseResponse)
-    .catch(function() {
+    .catch(function(err) {
+      console.log("[fetchProductInfo] Direct failed:", err, "- trying CORS proxy");
       // Fallback: use allorigins CORS proxy
-      return fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(jsonUrl))
-        .then(function(r) { return r.ok ? r.json() : Promise.reject("proxy failed"); })
+      var proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(jsonUrl);
+      console.log("[fetchProductInfo] Proxy URL:", proxyUrl);
+      return fetch(proxyUrl)
+        .then(function(r) { console.log("[fetchProductInfo] Proxy response:", r.status); return r.ok ? r.json() : Promise.reject("proxy failed " + r.status); })
         .then(function(d) { return JSON.parse(d.contents); })
         .then(parseResponse);
     });
@@ -158,7 +162,10 @@ function AddItemForm(props) {
   }
 
   function doFetch(inputUrl) {
-    if (!inputUrl || !inputUrl.match(/mailegusa\.com\/products\//i)) return;
+    console.log("[AddItem] doFetch called with:", inputUrl);
+    if (!inputUrl) return;
+    var m = inputUrl.match(/mailegusa\.com\/products\/([a-z0-9][\w-]*)/i);
+    if (!m) { console.log("[AddItem] URL did not match pattern"); return; }
     if (abortRef.current) abortRef.current.cancelled = true;
     var token = { cancelled: false };
     abortRef.current = token;
@@ -166,9 +173,11 @@ function AddItemForm(props) {
     setProduct(null);
     setError(null);
     setShowManual(false);
+    console.log("[AddItem] Starting fetchProductInfo...");
     fetchProductInfo(inputUrl)
-      .then(function(p) { if (!token.cancelled) setProduct(p); })
-      .catch(function() {
+      .then(function(p) { console.log("[AddItem] Fetch success:", p.name); if (!token.cancelled) setProduct(p); })
+      .catch(function(err) {
+        console.log("[AddItem] Fetch failed:", err);
         if (!token.cancelled) {
           setShowManual(true);
           setError("Auto-fetch didn't work \u2014 enter details manually below.");
@@ -179,14 +188,27 @@ function AddItemForm(props) {
 
   function handleUrlChange(e) {
     var val = e.target.value;
+    console.log("[AddItem] onChange:", val);
     setUrl(val);
     setProduct(null);
     setError(null);
     setJustAdded(null);
     setShowManual(false);
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (val.match(/mailegusa\.com\/products\/[a-z0-9-]+/i)) {
+    if (val.match(/mailegusa\.com\/products\/[a-z0-9]/i)) {
+      console.log("[AddItem] URL looks valid, scheduling fetch in 500ms");
       timerRef.current = setTimeout(function() { doFetch(val); }, 500);
+    }
+  }
+
+  // Also handle paste event directly as backup
+  function handlePaste(e) {
+    var pasted = e.clipboardData && e.clipboardData.getData("text");
+    if (pasted && pasted.match(/mailegusa\.com\/products\/[a-z0-9]/i)) {
+      console.log("[AddItem] onPaste detected valid URL:", pasted);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      // Small delay to let React update the input value first
+      setTimeout(function() { doFetch(pasted); }, 300);
     }
   }
 
@@ -222,6 +244,7 @@ function AddItemForm(props) {
         placeholder="https://www.mailegusa.com/products/..."
         value={url}
         onChange={handleUrlChange}
+        onPaste={handlePaste}
         autoFocus
       />
 
