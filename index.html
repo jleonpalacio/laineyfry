@@ -101,7 +101,7 @@ function prefetchImages(slugs, onUpdate) {
 
 // Fetch product info - try direct first, then CORS proxy fallback
 function fetchProductInfo(url) {
-  var m = url.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
+  var m = url.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9-]+)/i);
   if (!m) return Promise.reject("bad url");
   var slug = m[1];
   var jsonUrl = BASE + "/products/" + slug + ".json";
@@ -157,14 +157,14 @@ function AddItemForm(props) {
   var abortRef = useRef(null);
 
   function extractSlug(u) {
-    var m = u.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
+    var m = u.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9-]+)/i);
     return m ? m[1] : null;
   }
 
   function doFetch(inputUrl) {
     console.log("[AddItem] doFetch called with:", inputUrl);
     if (!inputUrl) return;
-    var m = inputUrl.match(/mailegusa\.com\/products\/([a-z0-9][\w-]*)/i);
+    var m = inputUrl.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/([a-z0-9][\w-]*)/i);
     if (!m) { console.log("[AddItem] URL did not match pattern"); return; }
     if (abortRef.current) abortRef.current.cancelled = true;
     var token = { cancelled: false };
@@ -195,7 +195,7 @@ function AddItemForm(props) {
     setJustAdded(null);
     setShowManual(false);
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (val.match(/mailegusa\.com\/products\/[a-z0-9]/i)) {
+    if (val.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/[a-z0-9]/i)) {
       console.log("[AddItem] URL looks valid, scheduling fetch in 500ms");
       timerRef.current = setTimeout(function() { doFetch(val); }, 500);
     }
@@ -204,7 +204,7 @@ function AddItemForm(props) {
   // Also handle paste event directly as backup
   function handlePaste(e) {
     var pasted = e.clipboardData && e.clipboardData.getData("text");
-    if (pasted && pasted.match(/mailegusa\.com\/products\/[a-z0-9]/i)) {
+    if (pasted && pasted.match(/mailegusa\.com\/(?:collections\/[^\/]+\/)?products\/[a-z0-9]/i)) {
       console.log("[AddItem] onPaste detected valid URL:", pasted);
       if (timerRef.current) clearTimeout(timerRef.current);
       // Small delay to let React update the input value first
@@ -241,7 +241,7 @@ function AddItemForm(props) {
       {justAdded && <div className="success-msg">{"\u2713 Added \u201c" + justAdded + "\u201d \u2014 paste another link or close."}</div>}
 
       <input
-        placeholder="https://www.mailegusa.com/products/..."
+        placeholder="Paste any mailegusa.com product link..."
         value={url}
         onChange={handleUrlChange}
         onPaste={handlePaste}
