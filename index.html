@@ -240,6 +240,7 @@ function App() {
   const [fetching, setFetching] = useState(false);
   const [fetchedProduct, setFetchedProduct] = useState(null);
   const [fetchError, setFetchError] = useState(null);
+  const fetchRef = useRef(0); // track fetch attempts to avoid stale results
   const [toast, setToast] = useState(null);
   const [claimModal, setClaimModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(null);
@@ -298,6 +299,17 @@ function App() {
       .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),3000);});
   };
 
+  // Reset add form completely
+  const resetAdd = () => {
+    setShowAdd(false);
+    setAddUrl("");
+    setFetchedProduct(null);
+    setFetchError(null);
+    setFetching(false);
+    setAddSize("Little Sister");
+    fetchRef.current++;
+  };
+
   // Auto-fetch product from URL
   const handleUrlPaste = (url) => {
     setAddUrl(url);
@@ -305,23 +317,28 @@ function App() {
     setFetchError(null);
     if (!url.includes("mailegusa.com/products/")) return;
     setFetching(true);
+    const thisFetch = ++fetchRef.current;
     fetchProductFromUrl(url)
-      .then(p => { setFetchedProduct(p); setImages({...imgStore}); })
-      .catch(() => setFetchError("Couldn't load product — you can still add manually below."))
-      .finally(() => setFetching(false));
+      .then(p => { if (fetchRef.current === thisFetch) { setFetchedProduct(p); setImages({...imgStore}); } })
+      .catch(() => { if (fetchRef.current === thisFetch) setFetchError("Couldn't load product — check the URL and try again."); })
+      .finally(() => { if (fetchRef.current === thisFetch) setFetching(false); });
   };
 
   const addProduct = () => {
     const fp = fetchedProduct;
     if (!fp?.name) return;
-    // Check if already in catalog
     if (items.find(i => i.slug === fp.slug)) { showToastMsg("Already in catalog!"); return; }
     setItems(p => {
       const n = [...p, { id: `c-${Date.now()}`, name: fp.name, size: addSize, coll: "Custom", price: fp.price, slug: fp.slug, url: `${BASE}/products/${fp.slug}`, status: "wishlist", isCustom: true }];
       saveData(n); return n;
     });
-    setAddUrl(""); setFetchedProduct(null); setShowAdd(false); setFetchError(null);
     showToastMsg("Added to wishlist!");
+    // Reset form but keep it OPEN for adding more
+    setAddUrl("");
+    setFetchedProduct(null);
+    setFetchError(null);
+    setAddSize("Little Sister");
+    fetchRef.current++;
   };
 
   const filtered = useMemo(() => items.filter(item => {
@@ -429,7 +446,7 @@ function App() {
 
       {/* Add item — now with smart URL fetch */}
       {!isGiftView&&<div className="add-section">
-        {!showAdd?<button className="add-btn" onClick={()=>setShowAdd(true)}>+ Add from mailegusa.com Link</button>:
+        {!showAdd?<button className="add-btn" onClick={()=>{resetAdd();setShowAdd(true);}}>+ Add from mailegusa.com Link</button>:
         <div className="add-form"><h3>Add Item</h3>
           <input placeholder="Paste a mailegusa.com product link..." value={addUrl} onChange={e=>handleUrlPaste(e.target.value)} />
 
@@ -450,11 +467,11 @@ function App() {
             </select>
             <div style={{display:"flex",gap:8}}>
               <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={addProduct}>Add to Wishlist</button>
-              <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={()=>{setShowAdd(false);setAddUrl("");setFetchedProduct(null);setFetchError(null);}}>Cancel</button>
+              <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={resetAdd}>Cancel</button>
             </div>
           </>}
 
-          {!fetchedProduct && !fetching && <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%"}} onClick={()=>{setShowAdd(false);setAddUrl("");setFetchError(null);}}>Cancel</button>}
+          {!fetchedProduct && !fetching && <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%"}} onClick={resetAdd}>Cancel</button>}
         </div>}
       </div>}
 
