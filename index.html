@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Elena's Maileg Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Nunito+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#faf7f2;--warm:#f0ebe3;--sand:#e6ddd0;--stone:#c4b8a8;--bark:#3b352e;--ink:#2a2520;--sage:#6a9e5a;--coral:#d4885c;--font-display:'Cormorant Garamond',Georgia,serif;--font-body:'Nunito Sans',-apple-system,sans-serif}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-body);background:var(--cream);color:var(--bark);min-height:100vh;-webkit-font-smoothing:antialiased}
+  .app{max-width:720px;margin:0 auto;padding:0 16px 100px}
+  .header{padding:48px 0 24px;border-bottom:1px solid var(--sand)}
+  .header-top{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .logo{font-size:36px;line-height:1}.title{font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--ink);letter-spacing:-.02em;line-height:1.1}
+  .subtitle{font-family:var(--font-display);font-size:14px;color:var(--stone);font-style:italic;margin-top:2px}
+  .stats{display:flex;background:var(--warm);border-radius:12px;overflow:hidden}
+  .stat{flex:1;text-align:center;padding:14px 8px}.stat+.stat{border-left:1px solid var(--sand)}
+  .stat-num{font-family:var(--font-display);font-size:24px;font-weight:700}
+  .stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--stone);margin-top:2px}
+  .stat-sub{font-size:10px;font-style:italic;margin-top:2px}
+  .mode-banner{margin-top:16px;padding:12px 16px;border-radius:10px;background:linear-gradient(135deg,#fdf0e4,#fce8d8);border:1px solid #ecd8c4;font-size:13px;color:#8a6a48}
+  .mode-banner strong{color:#6a4a28}
+  .nav{display:flex;gap:4px;padding:16px 0}
+  .nav-btn{flex:1;padding:10px 0;border:none;background:transparent;cursor:pointer;font-family:var(--font-body);font-size:14px;color:var(--stone);border-bottom:2px solid transparent;transition:all .2s}
+  .nav-btn.active{color:var(--bark);font-weight:600;border-bottom-color:var(--bark)}
+  .share-bar{display:flex;gap:8px;padding:12px 0;align-items:center}
+  .share-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--sand);background:#fff;cursor:pointer;font-family:var(--font-body);font-size:12px;color:var(--bark)}
+  .share-btn.primary{background:var(--bark);color:var(--cream);border-color:var(--bark)}
+  .share-copied{font-size:12px;color:var(--sage);font-weight:600}
+  .filters{padding-bottom:16px;border-bottom:1px solid var(--sand)}
+  .search{width:100%;padding:12px 16px;border:1px solid var(--sand);border-radius:10px;font-family:var(--font-body);font-size:14px;background:#fff;color:var(--bark);outline:none;margin-bottom:12px}
+  .search:focus{border-color:var(--stone)}
+  .pills{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+  .pill{padding:5px 12px;border-radius:20px;border:1px solid var(--sand);background:#fff;cursor:pointer;font-family:var(--font-body);font-size:12px;color:var(--stone);white-space:nowrap}
+  .pill.active{background:var(--bark);color:var(--cream);border-color:var(--bark)}
+  .grid{display:flex;flex-direction:column;gap:10px;padding-top:16px}
+  .card{background:#fff;border-radius:12px;padding:14px;display:flex;gap:14px;box-shadow:0 1px 4px rgba(0,0,0,.04);border-left:4px solid transparent;transition:all .2s;position:relative}
+  .card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+  .card.owned{border-left-color:var(--sage)}.card.wishlist{border-left-color:var(--coral)}.card.claimed{opacity:.6}
+  .card-img{width:80px;height:80px;border-radius:10px;overflow:hidden;flex-shrink:0;background:var(--warm);display:flex;align-items:center;justify-content:center}
+  .card-img img{width:100%;height:100%;object-fit:contain}.card-img .fallback{font-size:32px;opacity:.3}
+  .card-img .loading{width:20px;height:20px;border:2px solid var(--sand);border-top-color:var(--stone);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .card-body{flex:1;min-width:0}
+  .card-name{font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--ink);line-height:1.3}
+  .card-meta{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center}
+  .tag{font-size:10px;padding:2px 8px;border-radius:10px;font-family:var(--font-body)}
+  .tag-size{background:var(--warm);color:var(--stone)}.tag-coll{background:#eef1e9;color:#5a7a48}.tag-claimed{background:#f0e8ff;color:#7a5ab0}
+  .price{font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--ink)}
+  .claimed-by{font-size:11px;color:#7a5ab0;font-style:italic;margin-top:4px}
+  .card-actions{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+  .status-btn{padding:6px 16px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font-body);font-size:12px}
+  .status-btn.none{background:var(--warm);color:var(--stone)}.status-btn.owned{background:#eaf3e6;color:#4a7a3c;font-weight:600}.status-btn.wishlist{background:#fdf0e4;color:#b87040;font-weight:600}
+  .shop-link{padding:6px 14px;border-radius:8px;background:var(--bark);color:var(--cream);font-size:11px;text-decoration:none;font-family:var(--font-body);font-weight:600;display:inline-block}
+  .shop-link:hover{opacity:.85}
+  .del-btn{padding:4px 10px;border-radius:8px;border:1px solid #e0c0c0;background:#fff;color:#c07070;cursor:pointer;font-family:var(--font-body);font-size:11px;transition:all .15s}
+  .del-btn:hover{background:#fdf0f0;border-color:#c07070}
+  .claim-btn{padding:6px 16px;border-radius:8px;border:2px solid var(--coral);background:#fff;color:var(--coral);cursor:pointer;font-family:var(--font-body);font-size:12px;font-weight:600}
+  .claim-btn:hover{background:#fdf0e4}
+  .unclaim-btn{padding:6px 16px;border-radius:8px;border:1px solid #b8a0d8;background:#f0e8ff;color:#7a5ab0;cursor:pointer;font-family:var(--font-body);font-size:12px}
+  .unclaim-btn:hover{background:#e8ddf8}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{background:#fff;border-radius:16px;padding:28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+  .modal h3{font-family:var(--font-display);font-size:22px;margin-bottom:8px;color:var(--ink)}
+  .modal p{font-size:13px;color:var(--stone);margin-bottom:16px;line-height:1.5}
+  .modal input{width:100%;padding:12px 14px;border:1px solid var(--sand);border-radius:8px;font-family:var(--font-body);font-size:14px;outline:none;margin-bottom:16px}
+  .modal-actions{display:flex;gap:8px}
+  .modal-actions button{flex:1;padding:12px;border-radius:8px;font-family:var(--font-body);font-size:14px;cursor:pointer;border:none}
+  .modal-actions .confirm{background:var(--coral);color:#fff;font-weight:600}
+  .modal-actions .cancel{background:var(--warm);color:var(--stone)}
+  .modal-actions .danger{background:#d06060;color:#fff;font-weight:600}
+  .add-section{margin-top:28px;padding-top:24px;border-top:1px solid var(--sand)}
+  .add-btn{width:100%;padding:16px;border:2px dashed var(--sand);border-radius:12px;background:transparent;cursor:pointer;font-family:var(--font-body);font-size:13px;color:var(--stone)}
+  .add-btn:hover{border-color:var(--stone);color:var(--bark)}
+  .add-form{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+  .add-form h3{font-family:var(--font-display);font-size:18px;margin-bottom:16px}
+  .add-form input,.add-form select{width:100%;padding:10px 14px;border:1px solid var(--sand);border-radius:8px;font-family:var(--font-body);font-size:13px;outline:none;margin-bottom:10px;color:var(--bark);background:#fff}
+  .add-form .fetching{font-size:12px;color:var(--stone);font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .add-form .fetched-preview{display:flex;gap:12px;padding:12px;background:var(--warm);border-radius:8px;margin-bottom:12px;align-items:center}
+  .add-form .fetched-preview img{width:60px;height:60px;object-fit:contain;border-radius:6px;background:#fff}
+  .add-form .fetched-preview .info{flex:1}
+  .add-form .fetched-preview .info h4{font-family:var(--font-display);font-size:15px;margin-bottom:2px}
+  .add-form .fetched-preview .info span{font-size:13px;font-weight:700}
+  .footer{margin-top:32px;text-align:center;font-size:11px;color:var(--stone);font-style:italic;line-height:1.8}
+  .footer a{color:var(--stone)}
+  .empty{text-align:center;padding:60px 0;color:var(--stone)}.empty-icon{font-size:40px;margin-bottom:8px}
+  .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--bark);color:var(--cream);padding:10px 28px;border-radius:28px;font-size:14px;z-index:200;box-shadow:0 6px 24px rgba(0,0,0,.18);animation:toastIn .25s ease}
+  @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  @media(max-width:480px){.title{font-size:22px}.card-img{width:68px;height:68px}.card{padding:12px;gap:10px}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const BASE = "https://www.mailegusa.com";
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAXU_d3F5D3GH7E9pJulldaBNjWOaykax0",
+  authDomain: "maileglainey.firebaseapp.com",
+  databaseURL: "https://maileglainey-default-rtdb.firebaseio.com",
+  projectId: "maileglainey",
+};
+let db = null;
+try { db = firebase.initializeApp(FIREBASE_CONFIG).database ? firebase.database() : null; } catch(e) {}
+
+// Image cache with localStorage persistence
+const IMG_KEY = "maileg-img-v2";
+let imgStore = {};
+try { imgStore = JSON.parse(localStorage.getItem(IMG_KEY) || "{}"); } catch {}
+
+function prefetchImages(slugs, onUpdate) {
+  const need = slugs.filter(s => s && !imgStore[s]);
+  if (!need.length) return;
+  let i = 0;
+  function batch() {
+    const b = need.slice(i, i + 6);
+    if (!b.length) return;
+    i += 6;
+    Promise.allSettled(b.map(slug =>
+      fetch(`${BASE}/products/${slug}.json`).then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { imgStore[slug] = d?.product?.image?.src || d?.product?.images?.[0]?.src || "FAIL"; })
+        .catch(() => { imgStore[slug] = "FAIL"; })
+    )).then(() => {
+      localStorage.setItem(IMG_KEY, JSON.stringify(imgStore));
+      onUpdate({ ...imgStore });
+      setTimeout(batch, 100);
+    });
+  }
+  batch();
+}
+
+// Fetch product info from a mailegusa URL
+function fetchProductFromUrl(url) {
+  const m = url.match(/mailegusa\.com\/products\/([a-z0-9-]+)/i);
+  if (!m) return Promise.reject("Not a mailegusa product URL");
+  const slug = m[1];
+  return fetch(`${BASE}/products/${slug}.json`).then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => {
+      const p = d?.product;
+      if (!p) throw new Error("No product data");
+      const img = p.image?.src || p.images?.[0]?.src || null;
+      const price = p.variants?.[0]?.price ? parseFloat(p.variants[0].price) : null;
+      // Cache image
+      if (img) { imgStore[slug] = img; localStorage.setItem(IMG_KEY, JSON.stringify(imgStore)); }
+      return { name: p.title, price, slug, img };
+    });
+}
+
+function ProductImage({ slug, name, images }) {
+  if (!slug) return <span className="fallback">🐭</span>;
+  const c = images[slug];
+  if (!c) return <div className="loading"></div>;
+  if (c === "FAIL") return <span className="fallback">🐭</span>;
+  return <img src={c} alt={name} loading="lazy" onError={e => { e.target.style.display='none'; e.target.parentNode.innerHTML='<span class="fallback">🐭</span>'; }} />;
+}
+
+const CATALOG = [
+  { id:"baby-twins", name:"Twins, Baby Mice in Matchbox", size:"Baby", coll:"Mice in Boxes", price:38, slug:"twins-baby-mice-in-matchbox" },
+  { id:"sleepy-rose", name:"Sleepy Wakey Baby Mouse - Rose", size:"Baby", coll:"Baby Mice", price:27, slug:"sleepy-wakey-baby-mouse-in-matchbox-rose" },
+  { id:"sleepy-blue", name:"Sleepy Wakey Baby Mouse - Blue", size:"Baby", coll:"Baby Mice", price:27, slug:"sleepy-wakey-baby-mouse-in-matchbox-blue" },
+  { id:"baby-triplets", name:"Baby Mouse Triplets in Box", size:"Baby", coll:"Mice in Boxes", price:48, slug:"baby-mouse-triplets-in-box" },
+  { id:"baby-carry-rose", name:"Baby Mouse in Carry Cot - Rose", size:"Baby", coll:"Baby Mice", price:40, slug:"baby-mouse-in-carry-cot-rose" },
+  { id:"baby-carry-blue", name:"Baby Mouse in Carry Cot - Blue", size:"Baby", coll:"Baby Mice", price:40, slug:"baby-mouse-in-carry-cot-blue" },
+  { id:"ls-matchbox", name:"Little Sister Mouse in Matchbox", size:"Little Sister", coll:"Mice in Boxes", price:35, slug:"little-sister-mouse-in-matchbox-1" },
+  { id:"ls-matchbox24", name:"Little Sister in Matchbox (2024)", size:"Little Sister", coll:"Mice in Boxes", price:30, slug:"little-sister-mouse-in-matchbox" },
+  { id:"ls-dance", name:"Dance Mouse in Daybed, Little Sister", size:"Little Sister", coll:"Dance Mice", price:32, slug:"dance-mouse-in-daybed-little-sister" },
+  { id:"ls-princess", name:"Princess Mouse, Little Sister", size:"Little Sister", coll:"Royal Mice", price:34, slug:"princess-mouse-little-sister-in-matchbox" },
+  { id:"ls-ballerina", name:"Ballerina Mouse, Little Sister", size:"Little Sister", coll:"Dance Mice", price:20, slug:"ballerina-mouse-little-sister-heather" },
+  { id:"ls-tooth", name:"Tooth Fairy Mouse, Little Sister", size:"Little Sister", coll:"Tooth Fairy", price:34, slug:"tooth-fairy-mouse-little-sister-in-match-box" },
+  { id:"ls-surfer", name:"Surfer, Little Sister", size:"Little Sister", coll:"Beach Mice", price:40, slug:"surfer-little-sister" },
+  { id:"ls-beach-float", name:"Beach Mouse with Float, Little Sister", size:"Little Sister", coll:"Beach Mice", price:26, slug:"beach-mouse-with-float-little-sister-red-dot" },
+  { id:"ls-beach-cabin", name:"Beach Little Sister in Cabin", size:"Little Sister", coll:"Beach Mice", price:34, slug:"little-sister-in-cabin-de-plage" },
+  { id:"lb-matchbox", name:"Little Brother Mouse in Matchbox", size:"Little Brother", coll:"Mice in Boxes", price:35, slug:"little-brother-mouse-in-matchbox-1" },
+  { id:"lb-matchbox24", name:"Little Brother in Matchbox (2024)", size:"Little Brother", coll:"Mice in Boxes", price:30, slug:"little-brother-mouse-in-matchbox" },
+  { id:"lb-tooth", name:"Tooth Fairy Mouse, Little Brother", size:"Little Brother", coll:"Tooth Fairy", price:34, slug:"tooth-fairy-mouse-little-brother-in-match-box" },
+  { id:"lb-cowboy", name:"Cowboy on Rocking Horse, Little Brother", size:"Little Brother", coll:"Special", price:43, slug:"cowboy-mouse-on-rocking-horse-little-brother" },
+  { id:"lb-surfer", name:"Surfer, Little Brother", size:"Little Brother", coll:"Beach Mice", price:40, slug:"surfer-little-brother" },
+  { id:"lb-beach", name:"Beach Little Brother in Cabin", size:"Little Brother", coll:"Beach Mice", price:34, slug:"little-brother-in-cabin-de-plage" },
+  { id:"royal-twins", name:"Royal Twin Mice, Sister & Brother", size:"Little Sister", coll:"Royal Mice", price:47, slug:"royal-twin-mice-little-sister-and-brother-in-matchbox" },
+  { id:"louimax", name:"LouiMax & Stella, Sister & Brother", size:"Little Sister", coll:"LouiMax", price:52, slug:"louimax-and-stella-little-sister-and-brother-mice" },
+  { id:"bs-sister", name:"Sister Mouse, Big Sister", size:"Big Sister", coll:"Classic", price:30, slug:"sister-mouse-big-sister" },
+  { id:"bs-pajamas", name:"Big Sister Mouse in Box - Pajamas", size:"Big Sister", coll:"Mice in Boxes", price:30, slug:"big-brother-mouse-in-box-4" },
+  { id:"bs-ballet", name:"Ballet Dancer Mouse, Big Sister", size:"Big Sister", coll:"Dance Mice", price:32, slug:"ballet-dancer-mouse-big-sister" },
+  { id:"bs-princess", name:"Princess Mouse, Big Sister", size:"Big Sister", coll:"Royal Mice", price:30, slug:"princess-mouse-big-sister-1" },
+  { id:"bs-tri-coral", name:"Tricycle Mouse, Big Sister - Coral", size:"Big Sister", coll:"Tricycle", price:30, slug:"big-sister-tricycle-mouse-coral" },
+  { id:"bs-tri-rose", name:"Tricycle Mouse, Big Sister - Old Rose", size:"Big Sister", coll:"Tricycle", price:30, slug:"tricycle-mouse-big-sister-old-rose-1" },
+  { id:"bs-hiker", name:"Hiking Mouse, Big Sister", size:"Big Sister", coll:"Hiker Mice", price:43, slug:"hiker-mouse-big-sister-2" },
+  { id:"bs-pea", name:"Princess and the Pea, Big Sister", size:"Big Sister", coll:"Royal Mice", price:58, slug:"princess-and-the-pea-big-sister-mouse" },
+  { id:"bs-wellness-mint", name:"Wellness Mouse, Big Sister - Mint", size:"Big Sister", coll:"Special", price:32, slug:"mouse-spa-wellness-1" },
+  { id:"bs-wellness-rose", name:"Wellness Mouse, Big Sister - Rose", size:"Big Sister", coll:"Special", price:32, slug:"wellness-mouse-big-sister" },
+  { id:"bb-blue", name:"Big Brother Mouse in Box - Blue", size:"Big Brother", coll:"Mice in Boxes", price:30, slug:"big-brother-mouse-in-box" },
+  { id:"bb-yellow", name:"Big Brother Mouse in Box - Yellow", size:"Big Brother", coll:"Mice in Boxes", price:30, slug:"big-brother-mouse-in-box-3" },
+  { id:"bb-ballet", name:"Ballet Dancer Mouse, Big Brother", size:"Big Brother", coll:"Dance Mice", price:32, slug:"ballet-dancer-mouse-big-brother" },
+  { id:"bb-prince", name:"Prince Mouse, Big Brother", size:"Big Brother", coll:"Royal Mice", price:30, slug:"prince-mouse-big-brother" },
+  { id:"bb-tri", name:"Tricycle Mouse, Big Brother - Blue", size:"Big Brother", coll:"Tricycle", price:30, slug:"tricycle-mouse-big-brother-blue" },
+  { id:"bb-hiker", name:"Hiking Mouse, Big Brother", size:"Big Brother", coll:"Hiker Mice", price:43, slug:"hiker-mouse-big-brother-stripes" },
+  { id:"bb-surfer", name:"Surfer Mouse, Big Brother", size:"Big Brother", coll:"Beach Mice", price:46, slug:"surfer-big-brother" },
+  { id:"mum", name:"Mum Mouse", size:"Mum & Dad", coll:"Family", price:32, slug:"mum-mouse" },
+  { id:"mum-brown", name:"Mum Mouse - Light Brown", size:"Mum & Dad", coll:"Family", price:32, slug:"mum-mouse-light-brown" },
+  { id:"dad", name:"Dad Mouse", size:"Mum & Dad", coll:"Family", price:32, slug:"dad-mouse" },
+  { id:"dad-brown", name:"Dad Mouse - Light Brown", size:"Mum & Dad", coll:"Family", price:32, slug:"dad-mouse-light-brown" },
+  { id:"mum-dad", name:"Mum & Dad in Cigar Box", size:"Mum & Dad", coll:"Mice in Boxes", price:67, slug:"mum-and-dad-mice-in-cigar-box" },
+  { id:"granddad", name:"Granddad Mouse", size:"Mum & Dad", coll:"Family", price:32, slug:"granddad-mouse" },
+  { id:"farmhouse", name:"Mouse Hole Farmhouse", size:"Dollhouse", coll:"Dollhouses", price:175, slug:"mouse-hole-farmhouse" },
+  { id:"suitcasa", name:"SuitCasa Mouse House", size:"Dollhouse", coll:"Dollhouses", price:60, slug:"suitcasa-mouse-house" },
+  { id:"bed", name:"Bed, Mouse - Off White", size:"Furniture", coll:"Bedroom", price:48, slug:"bed-mouse-off-white" },
+  { id:"vbed", name:"Vintage Bed, Mouse - Mint", size:"Furniture", coll:"Bedroom", price:34, slug:"vintage-bed-mouse-mint" },
+  { id:"hc-my", name:"High Chair, My", size:"Furniture", coll:"Nursery", price:17, slug:"high-chair-my" },
+  { id:"hc-mint", name:"High Chair, Mouse - Mint", size:"Furniture", coll:"Nursery", price:11, slug:"high-chair-mouse-mint" },
+  { id:"nursery", name:"Nursery Table, Baby Mouse", size:"Furniture", coll:"Nursery", price:22, slug:"nursery-table-baby-mouse-off-white" },
+  { id:"kitchen", name:"Kitchen, Mouse - Mint", size:"Furniture", coll:"Kitchen", price:40, slug:"kitchen-mouse-mint" },
+  { id:"bath", name:"Bathtub, Mouse", size:"Furniture", coll:"Bathroom", price:28, slug:"bathtub-mouse" },
+  { id:"wardrobe", name:"Wardrobe, Mouse - Mint", size:"Furniture", coll:"Bedroom", price:46, slug:"wardrobe-mouse-mint" },
+  { id:"dining", name:"Dining Table with Chair", size:"Furniture", coll:"Living Room", price:40, slug:"dining-table-with-chair-mouse" },
+  { id:"toilet", name:"Toilet, Mouse", size:"Furniture", coll:"Bathroom", price:22, slug:"toilet-mouse" },
+  { id:"fridge", name:"Fridge, Mouse - Off White", size:"Furniture", coll:"Kitchen", price:38, slug:"fridge-mouse-off-white" },
+];
+
+const SIZES = ["All","Baby","Little Sister","Little Brother","Big Sister","Big Brother","Mum & Dad","Dollhouse","Furniture"];
+
+function App() {
+  const params = new URLSearchParams(window.location.search);
+  const isGiftView = params.get("view") === "wishlist";
+  const [items, setItems] = useState(() => CATALOG.map(i => ({ ...i, status: "none" })));
+  const [claims, setClaims] = useState({});
+  const [search, setSearch] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [view, setView] = useState(isGiftView ? "wishlist" : "collection");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addUrl, setAddUrl] = useState("");
+  const [addSize, setAddSize] = useState("Little Sister");
+  const [fetching, setFetching] = useState(false);
+  const [fetchedProduct, setFetchedProduct] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [claimModal, setClaimModal] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null);
+  const [unclaimModal, setUnclaimModal] = useState(null);
+  const [buyerName, setBuyerName] = useState(() => localStorage.getItem("maileg-buyer") || "");
+  const [copied, setCopied] = useState(false);
+  const [images, setImages] = useState(imgStore);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("maileg-data-v3") || "null");
+      if (saved) {
+        const merged = CATALOG.map(i => ({ ...i, status: saved.statuses?.[i.id] || "none" }));
+        setItems([...merged, ...(saved.custom || [])]);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => { prefetchImages(CATALOG.map(i => i.slug).filter(Boolean), setImages); }, []);
+  useEffect(() => { if(!db) return; const r=db.ref("maileg-claims"); r.on("value",s=>setClaims(s.val()||{})); return()=>r.off(); }, []);
+
+  const saveData = items => {
+    const statuses = {}; const custom = [];
+    items.forEach(i => { if(i.status!=="none") statuses[i.id]=i.status; if(i.isCustom) custom.push(i); });
+    localStorage.setItem("maileg-data-v3", JSON.stringify({ statuses, custom }));
+  };
+
+  const showToastMsg = m => { setToast(m); setTimeout(()=>setToast(null),2000); };
+  const cycleStatus = id => {
+    setItems(p => { const n=p.map(i=>i.id!==id?i:{...i,status:["none","owned","wishlist"][(["none","owned","wishlist"].indexOf(i.status)+1)%3]}); saveData(n); showToastMsg({owned:"✓ Owned",wishlist:"♡ Wishlist",none:"Cleared"}[n.find(i=>i.id===id).status]); return n; });
+  };
+  const deleteItem = id => { setItems(p=>{const n=p.filter(i=>i.id!==id);saveData(n);return n;}); setDeleteModal(null); showToastMsg("Removed"); };
+
+  // Claim (gift view) - only stores buyer name in Firebase, not shown publicly
+  const handleClaim = () => {
+    if(!buyerName.trim()||!claimModal) return;
+    localStorage.setItem("maileg-buyer", buyerName);
+    const data = { by: buyerName.trim(), at: Date.now() };
+    if(db) db.ref(`maileg-claims/${claimModal}`).set(data);
+    else setClaims(p=>({...p,[claimModal]:data}));
+    showToastMsg("Marked as bought!");
+    setClaimModal(null);
+  };
+
+  // Unclaim - anyone can do it
+  const handleUnclaim = () => {
+    if(!unclaimModal) return;
+    if(db) db.ref(`maileg-claims/${unclaimModal}`).remove();
+    else setClaims(p=>{const n={...p};delete n[unclaimModal];return n;});
+    showToastMsg("Unmarked — available again");
+    setUnclaimModal(null);
+  };
+
+  const shareWishlist = () => {
+    navigator.clipboard.writeText(location.origin+location.pathname+"?view=wishlist")
+      .then(()=>{setCopied(true);setTimeout(()=>setCopied(false),3000);});
+  };
+
+  // Auto-fetch product from URL
+  const handleUrlPaste = (url) => {
+    setAddUrl(url);
+    setFetchedProduct(null);
+    setFetchError(null);
+    if (!url.includes("mailegusa.com/products/")) return;
+    setFetching(true);
+    fetchProductFromUrl(url)
+      .then(p => { setFetchedProduct(p); setImages({...imgStore}); })
+      .catch(() => setFetchError("Couldn't load product — you can still add manually below."))
+      .finally(() => setFetching(false));
+  };
+
+  const addProduct = () => {
+    const fp = fetchedProduct;
+    if (!fp?.name) return;
+    // Check if already in catalog
+    if (items.find(i => i.slug === fp.slug)) { showToastMsg("Already in catalog!"); return; }
+    setItems(p => {
+      const n = [...p, { id: `c-${Date.now()}`, name: fp.name, size: addSize, coll: "Custom", price: fp.price, slug: fp.slug, url: `${BASE}/products/${fp.slug}`, status: "wishlist", isCustom: true }];
+      saveData(n); return n;
+    });
+    setAddUrl(""); setFetchedProduct(null); setShowAdd(false); setFetchError(null);
+    showToastMsg("Added to wishlist!");
+  };
+
+  const filtered = useMemo(() => items.filter(item => {
+    if(isGiftView && item.status!=="wishlist") return false;
+    if(view==="wishlist" && !isGiftView && item.status!=="wishlist") return false;
+    if(search){const q=search.toLowerCase();if(!item.name.toLowerCase().includes(q)&&!(item.coll||"").toLowerCase().includes(q))return false;}
+    if(sizeFilter!=="All"&&item.size!==sizeFilter) return false;
+    if(!isGiftView&&view==="collection"){
+      if(statusFilter==="Owned"&&item.status!=="owned")return false;
+      if(statusFilter==="Wishlist"&&item.status!=="wishlist")return false;
+      if(statusFilter==="Unmarked"&&item.status!=="none")return false;
+    }
+    return true;
+  }), [items,search,sizeFilter,statusFilter,view,isGiftView]);
+
+  const stats = useMemo(() => ({
+    total:items.length, owned:items.filter(i=>i.status==="owned").length,
+    wishlist:items.filter(i=>i.status==="wishlist").length,
+    wVal:items.filter(i=>i.status==="wishlist"&&i.price).reduce((a,i)=>a+i.price,0),
+    oVal:items.filter(i=>i.status==="owned"&&i.price).reduce((a,i)=>a+i.price,0),
+  }), [items]);
+
+  const wishlistClaimed = Object.keys(claims).filter(id=>items.find(i=>i.id===id)?.status==="wishlist").length;
+
+  return (
+    <div className="app">
+      {toast && <div className="toast">{toast}</div>}
+
+      {/* Claim Modal */}
+      {claimModal && <div className="modal-overlay" onClick={()=>setClaimModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <h3>I'm buying this! 🎁</h3>
+        <p>Enter your name so we can track claims. <strong>Your name won't be shown publicly</strong> — others will just see it's been claimed.</p>
+        <input placeholder="Your name" value={buyerName} onChange={e=>setBuyerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleClaim()} autoFocus />
+        <div className="modal-actions"><button className="confirm" onClick={handleClaim}>Claim it!</button><button className="cancel" onClick={()=>setClaimModal(null)}>Cancel</button></div>
+      </div></div>}
+
+      {/* Unclaim Modal */}
+      {unclaimModal && <div className="modal-overlay" onClick={()=>setUnclaimModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <h3>Remove claim?</h3>
+        <p>This will mark the item as available again so someone else can buy it.</p>
+        <div className="modal-actions"><button className="danger" onClick={handleUnclaim}>Yes, unclaim it</button><button className="cancel" onClick={()=>setUnclaimModal(null)}>Keep claim</button></div>
+      </div></div>}
+
+      {/* Delete Modal */}
+      {deleteModal && <div className="modal-overlay" onClick={()=>setDeleteModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <h3>Remove from catalog?</h3><p>This will remove <strong>{items.find(i=>i.id===deleteModal)?.name}</strong> from your tracker.</p>
+        <div className="modal-actions"><button className="danger" onClick={()=>deleteItem(deleteModal)}>Remove</button><button className="cancel" onClick={()=>setDeleteModal(null)}>Keep it</button></div>
+      </div></div>}
+
+      <header className="header">
+        <div className="header-top"><span className="logo">🐭</span><div><h1 className="title">{isGiftView?"Elena's Maileg Wishlist":"Elena's Maileg Collection"}</h1><p className="subtitle">{isGiftView?"Pick a gift to claim — she'll love any of these!":"A tiny world, carefully curated"}</p></div></div>
+        <div className="stats">
+          {isGiftView ? <>
+            <div className="stat"><div className="stat-num" style={{color:"var(--coral)"}}>{stats.wishlist}</div><div className="stat-label">on wishlist</div></div>
+            <div className="stat"><div className="stat-num" style={{color:"#7a5ab0"}}>{wishlistClaimed}</div><div className="stat-label">claimed</div></div>
+            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{Math.max(0,stats.wishlist-wishlistClaimed)}</div><div className="stat-label">available</div></div>
+          </> : <>
+            <div className="stat"><div className="stat-num">{stats.total}</div><div className="stat-label">catalog</div></div>
+            <div className="stat"><div className="stat-num" style={{color:"var(--sage)"}}>{stats.owned}</div><div className="stat-label">owned</div>{stats.oVal>0&&<div className="stat-sub" style={{color:"var(--sage)"}}>${stats.oVal}</div>}</div>
+            <div className="stat"><div className="stat-num" style={{color:"var(--coral)"}}>{stats.wishlist}</div><div className="stat-label">wishlist</div>{stats.wVal>0&&<div className="stat-sub" style={{color:"var(--coral)"}}>${stats.wVal}</div>}</div>
+          </>}
+        </div>
+        {isGiftView&&<div className="mode-banner">🎁 <strong>Gift mode</strong> — Claim a gift so others know it's taken. Changed your mind? You can unclaim anytime.</div>}
+      </header>
+
+      {!isGiftView&&<>
+        <nav className="nav"><button className={`nav-btn ${view==="collection"?"active":""}`} onClick={()=>setView("collection")}>Full Collection</button><button className={`nav-btn ${view==="wishlist"?"active":""}`} onClick={()=>setView("wishlist")}>♡ Wishlist ({stats.wishlist})</button></nav>
+        <div className="share-bar"><button className="share-btn primary" onClick={shareWishlist}>📋 Copy Wishlist Link</button>{copied&&<span className="share-copied">✓ Copied!</span>}</div>
+      </>}
+
+      <div className="filters">
+        <input className="search" placeholder="Search by name or collection..." value={search} onChange={e=>setSearch(e.target.value)} />
+        <div className="pills">{SIZES.map(s=><button key={s} className={`pill ${sizeFilter===s?"active":""}`} onClick={()=>setSizeFilter(s)}>{s}</button>)}</div>
+        {!isGiftView&&view==="collection"&&<div className="pills">{["All","Owned","Wishlist","Unmarked"].map(s=><button key={s} className={`pill ${statusFilter===s?"active":""}`} onClick={()=>setStatusFilter(s)}>{s}</button>)}</div>}
+      </div>
+
+      <div className="grid">
+        {filtered.map(item=>{const claim=claims[item.id];const isClaimed=!!claim;return(
+          <div key={item.id} className={`card ${item.status} ${isClaimed&&isGiftView?"claimed":""}`}>
+            <div className="card-img"><ProductImage slug={item.slug} name={item.name} images={images} /></div>
+            <div className="card-body">
+              <div className="card-name">{item.name}</div>
+              <div className="card-meta">
+                <span className="tag tag-size">{item.size}</span>
+                {item.coll&&<span className="tag tag-coll">{item.coll}</span>}
+                {item.price&&<span className="price">${item.price}</span>}
+                {isClaimed&&isGiftView&&<span className="tag tag-claimed">Claimed ✓</span>}
+              </div>
+              {isClaimed&&isGiftView&&<div className="claimed-by">🎁 Someone's buying this one!</div>}
+              <div className="card-actions">
+                {!isGiftView&&<button className={`status-btn ${item.status}`} onClick={()=>cycleStatus(item.id)}>{item.status==="owned"?"✓ Owned":item.status==="wishlist"?"♡ Wishlist":"○ Mark"}</button>}
+
+                {/* Gift view: claim or unclaim */}
+                {isGiftView&&!isClaimed&&<button className="claim-btn" onClick={()=>setClaimModal(item.id)}>🎁 I'll buy this!</button>}
+                {isGiftView&&isClaimed&&<button className="unclaim-btn" onClick={()=>setUnclaimModal(item.id)}>Unclaim</button>}
+
+                {(item.slug||item.url)&&<a className="shop-link" href={item.slug?`${BASE}/products/${item.slug}`:item.url} target="_blank" rel="noopener noreferrer">Shop →</a>}
+                {!isGiftView&&<button className="del-btn" onClick={()=>setDeleteModal(item.id)}>✕</button>}
+              </div>
+            </div>
+          </div>
+        );})}
+        {filtered.length===0&&<div className="empty"><div className="empty-icon">🔍</div>No items match your filters</div>}
+      </div>
+
+      {/* Add item — now with smart URL fetch */}
+      {!isGiftView&&<div className="add-section">
+        {!showAdd?<button className="add-btn" onClick={()=>setShowAdd(true)}>+ Add from mailegusa.com Link</button>:
+        <div className="add-form"><h3>Add Item</h3>
+          <input placeholder="Paste a mailegusa.com product link..." value={addUrl} onChange={e=>handleUrlPaste(e.target.value)} />
+
+          {fetching && <div className="fetching"><div className="loading" style={{width:16,height:16,borderWidth:2}}></div> Loading product info...</div>}
+          {fetchError && <p style={{fontSize:12,color:"#c07070",marginBottom:10}}>{fetchError}</p>}
+
+          {fetchedProduct && <div className="fetched-preview">
+            {fetchedProduct.img && <img src={fetchedProduct.img} alt="" />}
+            <div className="info">
+              <h4>{fetchedProduct.name}</h4>
+              {fetchedProduct.price && <span>${fetchedProduct.price}</span>}
+            </div>
+          </div>}
+
+          {fetchedProduct && <>
+            <select value={addSize} onChange={e=>setAddSize(e.target.value)} style={{marginBottom:12}}>
+              {SIZES.filter(s=>s!=="All").map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <div style={{display:"flex",gap:8}}>
+              <button style={{flex:1,padding:10,border:"none",borderRadius:8,background:"var(--bark)",color:"var(--cream)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={addProduct}>Add to Wishlist</button>
+              <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13}} onClick={()=>{setShowAdd(false);setAddUrl("");setFetchedProduct(null);setFetchError(null);}}>Cancel</button>
+            </div>
+          </>}
+
+          {!fetchedProduct && !fetching && <button style={{padding:"10px 20px",border:"1px solid var(--sand)",borderRadius:8,background:"#fff",color:"var(--stone)",cursor:"pointer",fontFamily:"var(--font-body)",fontSize:13,width:"100%"}} onClick={()=>{setShowAdd(false);setAddUrl("");setFetchError(null);}}>Cancel</button>}
+        </div>}
+      </div>}
+
+      <footer className="footer"><p>Prices & images from <a href={BASE} target="_blank">mailegusa.com</a></p>{!isGiftView&&<p>Share the wishlist link with family!</p>}</footer>
+    </div>
+  );
+}
+ReactDOM.render(<App />, document.getElementById("root"));
+</script>
+</body>
+</html>
